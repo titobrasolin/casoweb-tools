@@ -41,3 +41,12 @@ jobs:
       - name: pytest
         # -ra elenca i test saltati: se mancasse ffmpeg si vedrebbe subito
         run: .venv/bin/pytest -ra
+
+  # Unico controllo richiesto dalla regola su main: non va ritoccata se cambia la matrice.
+  esito:
+    name: test
+    if: always()
+    needs: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.pytest.result }}" = success
