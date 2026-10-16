@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "casoweb-tools"
+dynamic = ["version"]
+description = "Utility ed esperimenti della rubrica Tecnologia @ CASO su casoweb.eu"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Tito Brasolin" }]
+requires-python = ">=3.10"
+dependencies = ["click>=8.1"]
+
+[project.optional-dependencies]
+# inaSpeechSegmenter (tensorflow) non ha ancora ruote per Python 3.13
+separa-parlato = [
+    "inaSpeechSegmenter; python_version < '3.13'",
+    "faster-whisper",
+    "numpy",
+]
+# PC senza GPU NVIDIA: va usato insieme a scripts/overrides-cpu.txt (vedi README),
+# altrimenti si installano sia tensorflow sia tensorflow-cpu
+cpu = ["tensorflow-cpu; python_version < '3.13'"]
+dev = ["pytest", "numpy"]
+
+[project.scripts]
+casoweb = "casoweb_tools.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/titobrasolin/casoweb-tools"
+Rubrica = "https://www.casoweb.eu/?view=category&id=90"
+
+[tool.hatch.version]
+path = "src/casoweb_tools/__init__.py"
