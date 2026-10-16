@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import click
 
 FORMATI = ("mp3", "m4a", "opus", "flac", "wav")  # le chiavi di CODEC nel modulo core
+DIPENDENZE = ("numpy", "inaSpeechSegmenter", "faster_whisper")  # extra "separa-parlato"
 
 
 @click.command(
@@ -75,11 +77,15 @@ def separa_parlato(input: Path, **opzioni) -> None:
 
     Richiede ffmpeg di sistema e l'extra "separa-parlato" (vedi README).
     """
-    try:
-        from casoweb_tools import separa_parlato as core
-    except ImportError as exc:
+    mancanti = [m for m in DIPENDENZE if importlib.util.find_spec(m) is None]
+    if mancanti:
         raise click.ClickException(
-            f"Dipendenza mancante ({exc.name}): installa l'extra 'separa-parlato', "
-            "es. pipx install --force 'casoweb-tools[separa-parlato] @ git+https://github.com/titobrasolin/casoweb-tools.git'"
-        ) from exc
+            f"Dipendenze mancanti ({', '.join(mancanti)}): serve l'extra 'separa-parlato'. Reinstalla con\n"
+            "  uv tool install --force --python 3.12 "
+            "'casoweb-tools[separa-parlato] @ git+https://github.com/titobrasolin/casoweb-tools.git'\n"
+            "Sui PC senza GPU NVIDIA conviene la variante leggera descritta nel README:\n"
+            "  https://github.com/titobrasolin/casoweb-tools#readme"
+        )
+    from casoweb_tools import separa_parlato as core
+
     core.run(input, core.Opzioni(**opzioni))

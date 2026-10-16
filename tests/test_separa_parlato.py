@@ -132,3 +132,17 @@ def test_srt_da_cache(tmp_path):
     assert "buongiorno a tutti gli ascoltatori." in parlato
     assert "00:00:01,300 -->" in parlato  # 21.0 - 19.7 sulla timeline tagliata
     assert "00:00:21,000 -->" in silenziato
+
+
+def test_dipendenze_mancanti_messaggio_chiaro(tmp_path, monkeypatch):
+    import importlib.util
+
+    vera = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name, *a: None if name == "faster_whisper" else vera(name, *a))
+    src = tmp_path / "reg.wav"
+    src.write_bytes(b"")
+    res = CliRunner().invoke(main, ["separa-parlato", str(src)])
+    assert res.exit_code == 1
+    assert "faster_whisper" in res.output
+    assert "uv tool install" in res.output and "pipx" not in res.output
