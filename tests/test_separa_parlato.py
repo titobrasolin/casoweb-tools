@@ -145,4 +145,5 @@ def test_dipendenze_mancanti_messaggio_chiaro(tmp_path, monkeypatch):
     res = CliRunner().invoke(main, ["separa-parlato", str(src)])
     assert res.exit_code == 1
     assert "faster_whisper" in res.output
-    assert "uv tool install" in res.output and "pipx" not in res.output
+    # i test girano in un'installazione editabile: il suggerimento è per l'ambiente di sviluppo
+    assert "uv pip install" in res.output and "[dev,separa-parlato" in res.output

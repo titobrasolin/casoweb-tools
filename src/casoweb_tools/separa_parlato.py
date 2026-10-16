@@ -34,6 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
+from casoweb_tools.ambiente import manca_programma
+
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 SR = 48000  # frequenza di lavoro per il montaggio
@@ -506,7 +508,7 @@ def write_srt(path: Path, cues, tmap: TimeMap | None) -> None:
 # --------------------------------------------------------------------------
 def run(input: Path, args: Opzioni) -> None:
     if shutil.which("ffmpeg") is None:
-        raise SystemExit("Manca ffmpeg: sudo apt install ffmpeg")
+        raise SystemExit(manca_programma("ffmpeg"))
     if not input.is_file():
         raise SystemExit(f"File non trovato: {input}")
     stem = input.stem

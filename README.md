@@ -8,39 +8,70 @@ Ogni esperimento è un sottocomando di `casoweb`.
 
 ## 🚀 Installazione
 
-Serve [`uv`](https://docs.astral.sh/uv/) (consigliato) oppure `pipx`, più `ffmpeg` di sistema:
+### Cosa serve
+
+**ffmpeg**, il programma che legge e scrive audio e video:
 
 ```bash
-sudo apt install ffmpeg
+sudo apt install ffmpeg        # Debian, Ubuntu e derivate
 ```
 
-### Solo i comandi leggeri
+**[uv](https://docs.astral.sh/uv/)**, per installare `casoweb`:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+> **Perché non basta `pip install`?** uv (come il più noto
+> [pipx](https://pipx.pypa.io/)) installa un programma Python in un ambiente
+> tutto suo: non tocca il Python di sistema né gli altri programmi, e si
+> rimuove senza lasciare tracce. Qui uv è preferibile per due motivi: procura
+> da solo la versione di Python giusta, e soprattutto sa escludere le librerie
+> NVIDIA quando non servono, cosa che pipx non sa fare (vedi sotto).
+>
+> Se dopo l'installazione il comando `casoweb` non viene trovato, lancia
+> `uv tool update-shell` e apri un nuovo terminale.
+
+### I comandi leggeri
+
+`video-da-audio` e gli altri comandi senza dipendenze pesanti:
 
 ```bash
 uv tool install git+https://github.com/titobrasolin/casoweb-tools.git
-# oppure
-pipx install git+https://github.com/titobrasolin/casoweb-tools.git
 ```
 
-### Con `separa-parlato` (Whisper e inaSpeechSegmenter)
+Per questi va bene anche `pipx install git+https://github.com/titobrasolin/casoweb-tools.git`.
 
-Le dipendenze di `separa-parlato` sono pesanti e stanno nell'extra `separa-parlato`
-(Python 3.10–3.12).
+### Con `separa-parlato`
+
+`separa-parlato` usa Whisper e inaSpeechSegmenter: le sue dipendenze,
+pesanti, stanno nell'extra `separa-parlato` e richiedono Python 3.12 o
+precedente (uv lo scarica da solo se manca).
 
 **PC con scheda NVIDIA**: le librerie CUDA arrivano insieme a TensorFlow e
-vengono usate anche da Whisper.
+servono anche a Whisper.
 
 ```bash
-uv tool install --python 3.12 "casoweb-tools[separa-parlato] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+uv tool install --python 3.12 \
+    "casoweb-tools[separa-parlato] @ git+https://github.com/titobrasolin/casoweb-tools.git"
 ```
 
-**PC senza GPU NVIDIA**: con l'extra `cpu` e il file di override si evitano
-oltre 5 GB di librerie `nvidia-*` inutili (circa 2 GB in tutto invece di 7).
+**PC senza GPU NVIDIA**: variante leggera, circa 2 GB invece di oltre 7.
 
 ```bash
-curl -LO https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt
-uv tool install --python 3.12 --overrides overrides-cpu.txt \
+uv tool install --python 3.12 \
+    --overrides https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt \
     "casoweb-tools[separa-parlato,cpu] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+```
+
+Se qualcosa manca, `casoweb` se ne accorge e suggerisce il comando adatto a
+come è stato installato e alla presenza o meno della GPU.
+
+### Aggiornare e disinstallare
+
+```bash
+uv tool upgrade casoweb-tools
+uv tool uninstall casoweb-tools
 ```
 
 ### Sviluppo locale

@@ -11,7 +11,7 @@ Per ogni profilo scelto produce <nome>_<profilo>.mp4, con:
   - "respiro" di nero e silenzio a inizio e fine (i sottotitoli vengono
     spostati di conseguenza) e dissolvenze video/audio.
 
-Servono solo ffmpeg e ffprobe (sudo apt install ffmpeg): nessuna libreria Python.
+Servono solo ffmpeg e ffprobe: nessuna libreria Python.
 
 Interfaccia a riga di comando: `casoweb video-da-audio` (vedi
 casoweb_tools.cmds.video_da_audio).
@@ -30,6 +30,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from casoweb_tools.ambiente import manca_programma
 
 # nome -> parametri del profilo
 #   w, h          dimensioni del video
@@ -198,7 +200,7 @@ def run(audio: Path, cli: dict, *, load_params: str | None = None, anteprima: bo
     """`cli` ha le chiavi di BUILTIN_DEFAULTS; i valori None prendono il default."""
     for b in ("ffmpeg", "ffprobe"):
         if shutil.which(b) is None:
-            sys.exit(f"Manca {b}: sudo apt install ffmpeg")
+            sys.exit(manca_programma("ffmpeg"))
     if not audio.is_file():
         sys.exit(f"File non trovato: {audio}")
 
@@ -280,5 +282,5 @@ def run(audio: Path, cli: dict, *, load_params: str | None = None, anteprima: bo
         if player:
             subprocess.run([player, str(generated[0])])
         else:
-            print("mpv non trovato (sudo apt install mpv)")
+            print(manca_programma("mpv") + " (serve per l'anteprima)")
 
