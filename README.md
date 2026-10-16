@@ -101,6 +101,7 @@ casoweb <comando> --help
 |---|---|---|
 | `casoweb separa-parlato` | Separa parlato e musica in una registrazione (trasmissione radio, podcast, conferenza...), produce l'audio col solo parlato e quello con la musica silenziata, e i rispettivi sottotitoli `.srt` (faster-whisper, GPU se disponibile). | [Dall'intervista radio ai sottotitoli, senza la musica](https://www.casoweb.eu/?view=article&id=307&catid=90) |
 | `casoweb video-da-audio` | Trasforma un audio con i suoi sottotitoli in video con sfondo fisso, in più profili: YouTube, web, WhatsApp (sotto i 16 MB per mezz'ora), quadrato e verticale. | idem |
+| `casoweb video-per-canon` | Converte un video qualsiasi nella coppia `MVI_NNNN.AVI` + `.THM` che una vecchia Canon PowerShot riproduce sul proprio display (provato sulla A2000 IS, 160x120 a 15 fps). Solo ffmpeg. | in preparazione |
 
 Flusso tipico:
 
@@ -110,7 +111,7 @@ casoweb separa-parlato registrazione.webm --nomi "Mario Rossi, Anna Bianchi"
 casoweb video-da-audio registrazione_output/registrazione_parlato.mp3 --immagine locandina.jpg
 ```
 
-Dettagli in [docs/separa-parlato.md](docs/separa-parlato.md).
+Dettagli in [docs/separa-parlato.md](docs/separa-parlato.md) e [docs/video-per-canon.md](docs/video-per-canon.md).
 
 ---
 
@@ -122,8 +123,11 @@ casoweb-tools/
 │   └── casoweb_tools/
 │       ├── cli.py              # gruppo click `casoweb`
 │       ├── cmds/               # un sottocomando per esperimento (solo interfaccia)
+│       ├── ambiente.py         # come è installato casoweb, per i messaggi d'errore
 │       ├── separa_parlato.py   # logica, importata solo quando serve
-│       └── video_da_audio.py
+│       ├── video_da_audio.py
+│       ├── canon_avi.py        # contenitore AVI nello stile Canon PowerShot
+│       └── video_per_canon.py
 ├── tests/
 ├── docs/             # note sugli esperimenti e bozze per gli articoli
 ├── scripts/          # script e file di supporto non Python
