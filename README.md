@@ -1,5 +1,7 @@
 # casoweb-tools
 
+[![test](https://github.com/titobrasolin/casoweb-tools/actions/workflows/test.yml/badge.svg)](https://github.com/titobrasolin/casoweb-tools/actions/workflows/test.yml)
+
 Raccolta di utility, script di servizio e piccoli esperimenti sviluppati per la rubrica **[Tecnologia @ CASO](https://www.casoweb.eu/?view=category&id=90)** su *casoweb.eu*.
 
 Ogni esperimento è un sottocomando di `casoweb`.

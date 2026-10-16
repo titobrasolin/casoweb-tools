@@ -12,6 +12,12 @@ from casoweb_tools.cli import main
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="serve ffmpeg")
 
 
+@pytest.fixture
+def senza_modelli(monkeypatch):
+    """Il comando controlla in anticipo tutto l'extra; con TSV e cache pronti bastano numpy e ffmpeg."""
+    monkeypatch.setattr("casoweb_tools.cmds.separa_parlato.DIPENDENZE", ("numpy",))
+
+
 def test_clean_segments_accorpa_frammenti():
     raw = [
         ("speech", 0.0, 10.0),
@@ -90,7 +96,7 @@ def test_gain_rampe_interne():
 
 
 @needs_ffmpeg
-def test_end_to_end_senza_modelli(tmp_path):
+def test_end_to_end_senza_modelli(tmp_path, senza_modelli):
     """Con un TSV già pronto e senza trascrizione non servono né inaSpeechSegmenter né Whisper."""
     src = tmp_path / "reg.wav"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:d=30",
@@ -114,7 +120,7 @@ def test_end_to_end_senza_modelli(tmp_path):
 
 
 @needs_ffmpeg
-def test_srt_da_cache(tmp_path):
+def test_srt_da_cache(tmp_path, senza_modelli):
     """Trascrizione in cache: si rigenerano gli SRT senza caricare Whisper."""
     src = tmp_path / "reg.wav"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=30", str(src)], check=True)
