@@ -1,45 +1,116 @@
 # casoweb-tools
 
+[![test](https://github.com/titobrasolin/casoweb-tools/actions/workflows/test.yml/badge.svg)](https://github.com/titobrasolin/casoweb-tools/actions/workflows/test.yml)
+
 Raccolta di utility, script di servizio e piccoli esperimenti sviluppati per la rubrica **[Tecnologia @ CASO](https://www.casoweb.eu/?view=category&id=90)** su *casoweb.eu*.
+
+Ogni esperimento è un sottocomando di `casoweb`.
 
 ---
 
 ## 🚀 Installazione
 
-Il pacchetto può essere installato direttamente dal repository GitHub.
+### Cosa serve
 
-### Utilizzo consigliato con `pipx`
+**ffmpeg**, il programma che legge e scrive audio e video:
+
 ```bash
-pipx install git+[https://github.com/titobrasolin/casoweb-tools.git](https://github.com/titobrasolin/casoweb-tools.git)
+sudo apt install ffmpeg        # Debian, Ubuntu e derivate
 ```
 
-### Installazione con `pip`
+**[uv](https://docs.astral.sh/uv/)**, per installare `casoweb`:
+
 ```bash
-pip install git+[https://github.com/titobrasolin/casoweb-tools.git](https://github.com/titobrasolin/casoweb-tools.git)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Installazione per sviluppo locale
-Se desideri apportare modifiche agli script o testarli in locale:
+> **Perché non basta `pip install`?** uv (come il più noto
+> [pipx](https://pipx.pypa.io/)) installa un programma Python in un ambiente
+> tutto suo: non tocca il Python di sistema né gli altri programmi, e si
+> rimuove senza lasciare tracce. Qui uv è preferibile per due motivi: procura
+> da solo la versione di Python giusta, e soprattutto sa escludere le librerie
+> NVIDIA quando non servono, cosa che pipx non sa fare (vedi sotto).
+>
+> Se dopo l'installazione il comando `casoweb` non viene trovato, lancia
+> `uv tool update-shell` e apri un nuovo terminale.
+
+### I comandi leggeri
+
+`video-da-audio` e gli altri comandi senza dipendenze pesanti:
 
 ```bash
-git clone [https://github.com/titobrasolin/casoweb-tools.git](https://github.com/titobrasolin/casoweb-tools.git)
+uv tool install git+https://github.com/titobrasolin/casoweb-tools.git
+```
+
+Per questi va bene anche `pipx install git+https://github.com/titobrasolin/casoweb-tools.git`.
+
+### Con `separa-parlato`
+
+`separa-parlato` usa Whisper e inaSpeechSegmenter: le sue dipendenze,
+pesanti, stanno nell'extra `separa-parlato` e richiedono Python 3.12 o
+precedente (uv lo scarica da solo se manca).
+
+**PC con scheda NVIDIA**: le librerie CUDA arrivano insieme a TensorFlow e
+servono anche a Whisper.
+
+```bash
+uv tool install --python 3.12 \
+    "casoweb-tools[separa-parlato] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+```
+
+**PC senza GPU NVIDIA**: variante leggera, circa 2 GB invece di oltre 7.
+
+```bash
+uv tool install --python 3.12 \
+    --overrides https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt \
+    "casoweb-tools[separa-parlato,cpu] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+```
+
+Se qualcosa manca, `casoweb` se ne accorge e suggerisce il comando adatto a
+come è stato installato e alla presenza o meno della GPU.
+
+### Aggiornare e disinstallare
+
+```bash
+uv tool upgrade casoweb-tools
+uv tool uninstall casoweb-tools
+```
+
+### Sviluppo locale
+
+```bash
+git clone https://github.com/titobrasolin/casoweb-tools.git
 cd casoweb-tools
-pip install -e .
+uv venv -p 3.12
+uv pip install --overrides scripts/overrides-cpu.txt -e '.[dev,separa-parlato,cpu]'   # oppure solo '.[dev]'
+.venv/bin/pytest
 ```
 
 ---
 
 ## 🛠️ Utilizzo
 
-Una volta installato, il comando principale disponibile a riga di comando è `casoweb`:
-
 ```bash
 casoweb --help
+casoweb <comando> --help
 ```
 
-### Strumenti e comandi disponibili
+### Comandi disponibili
 
-* `casoweb <comando>`: Descrizione sintetica della funzione/esperimento.
+| Comando | Cosa fa | Articolo |
+|---|---|---|
+| `casoweb separa-parlato` | Separa parlato e musica in una registrazione (trasmissione radio, podcast, conferenza...), produce l'audio col solo parlato e quello con la musica silenziata, e i rispettivi sottotitoli `.srt` (faster-whisper, GPU se disponibile). | [Dall'intervista radio ai sottotitoli, senza la musica](https://www.casoweb.eu/?view=article&id=307&catid=90) |
+| `casoweb video-da-audio` | Trasforma un audio con i suoi sottotitoli in video con sfondo fisso, in più profili: YouTube, web, WhatsApp (sotto i 16 MB per mezz'ora), quadrato e verticale. | idem |
+
+Flusso tipico:
+
+```bash
+casoweb separa-parlato registrazione.webm --nomi "Mario Rossi, Anna Bianchi"
+# eventualmente: correggere registrazione_output/registrazione_segmenti.tsv e rilanciare
+casoweb video-da-audio registrazione_output/registrazione_parlato.mp3 --immagine locandina.jpg
+```
+
+Dettagli in [docs/separa-parlato.md](docs/separa-parlato.md).
 
 ---
 
@@ -49,14 +120,20 @@ casoweb --help
 casoweb-tools/
 ├── src/
 │   └── casoweb_tools/
-│       ├── __init__.py
-│       ├── cli.py
-│       └── cmds/
-├── scripts/          # Script Bash e utility non-Python
+│       ├── cli.py              # gruppo click `casoweb`
+│       ├── cmds/               # un sottocomando per esperimento (solo interfaccia)
+│       ├── separa_parlato.py   # logica, importata solo quando serve
+│       └── video_da_audio.py
+├── tests/
+├── docs/             # note sugli esperimenti e bozze per gli articoli
+├── scripts/          # script e file di supporto non Python
 ├── pyproject.toml
 ├── LICENSE
 └── README.md
 ```
+
+I moduli in `cmds/` non importano dipendenze pesanti: `casoweb --help` funziona
+anche senza gli extra installati.
 
 ---
 

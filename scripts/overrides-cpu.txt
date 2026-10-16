@@ -1,0 +1,9 @@
+# Installazione su PC senza GPU NVIDIA: insieme all'extra "cpu" evita i
+# diversi GB di librerie nvidia-* che inaSpeechSegmenter si porta dietro
+# (tensorflow[and-cuda] e onnxruntime-gpu). Uso:
+#   uv tool install --python 3.12 \
+#       --overrides https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt \
+#       "casoweb-tools[separa-parlato,cpu] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+# Gli override restano nella ricevuta di uv: `uv tool upgrade` li rispetta.
+tensorflow; sys_platform == "never"
+onnxruntime-gpu; sys_platform == "never"

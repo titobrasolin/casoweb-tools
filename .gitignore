@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# File locali: temporanei, appunti, documentazione solo da consultare (a qualunque livello)
+.private/
+
+# Media e output prodotti dagli strumenti
+*_output/
+*_video/
