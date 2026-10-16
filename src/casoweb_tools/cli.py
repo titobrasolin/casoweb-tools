@@ -4,6 +4,7 @@ import click
 
 from casoweb_tools import __version__
 from casoweb_tools.cmds.video_da_audio import video_da_audio
+from casoweb_tools.cmds.video_per_canon import video_per_canon
 from casoweb_tools.cmds.separa_parlato import separa_parlato
 
 
@@ -18,3 +19,4 @@ def main() -> None:
 
 main.add_command(separa_parlato)
 main.add_command(video_da_audio)
+main.add_command(video_per_canon)
