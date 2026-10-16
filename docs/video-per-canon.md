@@ -4,34 +4,69 @@ Note tecniche per `casoweb video-per-canon`, nato da un esperimento con una
 Canon PowerShot A2000 IS (2008, DIGIC III): far vedere sul display della
 fotocamera, nella sua galleria, foto e video copiati sulla scheda dal PC.
 
-## Cosa si è scoperto
+Ogni affermazione qui sotto ha una fonte, indicata così:
 
-**Foto.** Basta il nome giusto. Una foto copiata in `DCIM/1NNCANON/` con un
-nome `IMG_NNNN.JPG` che rispetta la numerazione viene mostrata, anche se il
-catalogo `DCIM/CANONMSC/M0NNN.CTG` non la elenca: la fotocamera non ne ha
-bisogno per la galleria.
+- **[prova]**: provato sulla fotocamera;
+- **[ispezione]**: ricavato analizzando file prodotti dalla fotocamera;
+- **[Canon]**: documentazione ufficiale (vedi [Fonti](#fonti));
+- **[DCF]**: standard DCF, cui Canon dichiara la fotocamera conforme, ma
+  non verificato sulla fotocamera;
+- **[deduzione]**: ragionamento non ancora verificato.
 
-**Video.** Servono due file con lo stesso numero:
+## Cosa sa fare la fotocamera
+
+| Modalità | Risoluzione | fps | Durata massima di un clip | Stato in `video-per-canon` |
+|---|---|---|---|---|
+| Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
+| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura **[deduzione]** |
+| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, formato osservato **[ispezione]**, struttura **[deduzione]** |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**, nessun file esaminato |
+
+Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
+dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
+e audio WAVE mono a 8 bit **[Canon]**; la frequenza, che Canon arrotonda a
+"11 kHz", è in realtà **11024 Hz** **[ispezione]**.
+
+## Come la fotocamera trova i file
+
+**Numeri e cartelle.** La fotocamera numera i file da 0001 a 9999 e li
+salva in cartelle di al massimo 2000 immagini **[Canon]** (guida, p. 119),
+chiamate `1NNCANON` sotto `DCIM` **[ispezione]**. Foto e video condividono
+la numerazione **[ispezione]**: un numero va scelto tra quelli non usati da
+nessun file della cartella. Che la galleria segua l'ordine dei numeri è
+**[DCF]**.
+
+**Foto.** Basta il nome giusto: una foto della fotocamera, duplicata e
+rinominata con un numero libero, compare nella galleria **[prova]**.
+
+**Catalogo.** `DCIM/CANONMSC/M0NNN.CTG` elenca i file della cartella, ma
+non serve né per le foto né per i video **[prova]**.
+
+**Video.** Servono due file con lo stesso numero **[prova]**:
 
 | File | Cosa contiene |
 |---|---|
-| `MVI_NNNN.AVI` | Motion JPEG 4:2:2 e audio PCM 8 bit mono a **11024 Hz** (non 11025), in un AVI costruito esattamente come quelli della fotocamera |
-| `MVI_NNNN.THM` | JPEG 160x120, l'anteprima della galleria, con un blocco Exif Canon che contiene anche il **numero di fotogrammi** |
+| `MVI_NNNN.AVI` | il filmato, in un AVI costruito esattamente come quelli della fotocamera |
+| `MVI_NNNN.THM` | JPEG 160x120 con un blocco Exif Canon **[ispezione]**: è il file di miniatura previsto dallo standard **[DCF]** |
 
-Senza il THM il video non compare. Se il THM non concorda con l'AVI, il
-video compare ma non parte. La durata mostrata dalla galleria viene dal
-THM, non dall'AVI.
+- Senza il THM il video non compare **[prova]**.
+- La durata che la galleria mostra viene dal THM, che contiene anche il
+  numero di fotogrammi **[ispezione]** **[prova]**.
+- Se il THM non concorda con l'AVI, il video compare ma non parte o si
+  ferma **[prova]**.
+- Il numero del file scritto nel THM non è determinante **[prova]**.
 
-**Numeri.** Da 0001 a 9999, non usati da nessun altro file della cartella:
-foto e video condividono la numerazione. La galleria segue l'ordine dei
-numeri.
+Il messaggio "Immagine non identificata" è quello che la guida prevede per
+immagini "manipolate su un computer, rinominate o riprese con un'altra
+fotocamera" **[Canon]** (p. 93 e risoluzione dei problemi): la fotocamera
+non garantisce di mostrare file che non ha prodotto lei. Quello che segue
+la convince che li ha prodotti lei.
 
 ## Perché ffmpeg non basta
 
 Anche un semplice `ffmpeg -i MVI_1259.AVI -c copy`, che copia fotogrammi e
-audio identici, produce un file che la fotocamera rifiuta ("Immagine non
-identificata"). A non andare è il contenitore. Un AVI Canon ("CanonMVI06")
-ha:
+audio identici, produce un file che la fotocamera rifiuta **[prova]**. A non
+andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
 
 - un'intestazione fissa di 2 KB: il blocco `LIST movi` inizia sempre a
   `0x800`, con un `JUNK` di riempimento;
@@ -43,18 +78,16 @@ ha:
 - la durata del fotogramma troncata (66666 µs a 15 fps), la data nel blocco
   `IDIT` e il programma "CanonMVI06".
 
-Anche i fotogrammi sono diversi da quelli di ffmpeg: marcatore `AVI1` al
-posto di `JFIF`, un `DRI` e nessuna tabella Huffman (si usano quelle
-standard del JPEG).
+Anche i fotogrammi sono diversi da quelli di ffmpeg **[ispezione]**:
+marcatore `AVI1` al posto di `JFIF`, un `DRI` e nessuna tabella Huffman (si
+usano quelle standard del JPEG).
 
 `casoweb_tools.canon_avi` riproduce questa struttura: rigenerando un AVI
-della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un file
-**identico byte per byte**. Lo si può controllare su qualunque AVI della
-propria fotocamera:
-
-```bash
-casoweb video-per-canon --verifica MVI_1259.AVI
-```
+Compact della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un
+file **identico byte per byte** **[ispezione]**. Che a 30 fps la struttura
+sia la stessa, con un secondo di audio e 30 fotogrammi per blocco, è
+**[deduzione]**, coerente con l'interleave di un secondo che `mediainfo`
+riporta per un file a 640x480 **[ispezione]**.
 
 ## Uso
 
@@ -70,29 +103,52 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 - `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
   THM.
 - Lo script alza la compressione finché il fotogramma più pesante resta
-  sotto il limite del profilo (circa 5 KB nel 160x120, come nei file
-  Canon), e stampa dimensione media e massima.
+  sotto il limite del profilo: circa 5 KB nel 160x120, come nei file Canon
+  **[ispezione]**. Stampa poi dimensione media e massima.
+- Avvisa quando il video supera la durata massima che la fotocamera
+  registrerebbe in quella modalità (3 minuti in Compact) o i 4 GB. Non si
+  sa se la fotocamera rifiuti un file più lungo **[deduzione]**: l'avviso
+  serve a non scoprirlo per caso.
 - Copiare sempre AVI e THM insieme.
 
 ## Stato delle verifiche
 
 | | Esito |
 |---|---|
-| Foto copiata e rinominata | si vede |
-| Catalogo `.CTG` | non serve, né per le foto né per i video |
-| AVI rimuxato da ffmpeg | rifiutato |
-| AVI di `canon_avi` con fotogrammi Canon e THM coerente | si riproduce |
-| Video qualsiasi convertito, profilo `compatto` (160x120, 15 fps) | si riproduce |
-| THM con numero del file non aggiornato | si riproduce: quel campo non è determinante |
-| THM con numero di fotogrammi diverso dall'AVI | compare ma non parte |
-| Profili `320x240` e `640x480` a 30 fps | **da verificare**: struttura dedotta, non provata |
-| Modalità LP | da esplorare |
+| Foto copiata e rinominata | si vede **[prova]** |
+| Catalogo `.CTG` | non serve **[prova]** |
+| AVI rimuxato da ffmpeg | rifiutato **[prova]** |
+| AVI di `canon_avi` con fotogrammi Canon e THM coerente | si riproduce **[prova]** |
+| Video qualsiasi convertito, profilo `compatto` | si riproduce **[prova]** |
+| THM con numero del file non aggiornato | si riproduce **[prova]** |
+| THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
+| Profili `320x240` e `640x480` | da verificare |
+| Modalità LP | da esplorare: con un file Canon si capirà se basta comprimere di più o se cambia anche il THM |
+| Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato con fotogrammi da 6-7 KB
 dipendesse dalla loro dimensione o dai metadati incoerenti, perché nella
 prova successiva sono cambiate entrambe le cose. Per prudenza il limite
 resta.
 
-Per estendere i profili serve un esemplare vero di ciascuna modalità
-(bastano pochi secondi di AVI e THM): se `--verifica` lo rigenera identico,
-la struttura è confermata.
+Per confermare un profilo serve un esemplare vero di quella modalità
+(bastano pochi secondi di AVI e THM): se
+
+```bash
+casoweb video-per-canon --verifica MVI_NNNN.AVI
+```
+
+lo rigenera identico, la struttura è confermata.
+
+## Fonti
+
+- Canon, *PowerShot A2000 IS Camera User Guide* (CDI-E388-010, 2008),
+  [PDF in inglese sul sito di download Canon](http://gdlp01.c-wss.com/gds/5/0300001235/01/PSA2000IS_CUG_EN.pdf):
+  modalità video (p. 90), durate e limiti dei clip (p. 91), numerazione dei
+  file e cartelle (p. 119), messaggi per i file non riconosciuti (p. 93 e
+  risoluzione dei problemi). In italiano dalla
+  [pagina di supporto Canon Italia](https://www.canon.it/support/consumer/products/cameras/powershot/a-series/powershot-a2000-is.html?type=manuals).
+- Canon, [specifiche della PowerShot A2000 IS](https://in.canon/en/support/6200025000):
+  formati, modalità video e conformità DCF e DPOF.
+- [Design rule for Camera File system](https://en.wikipedia.org/wiki/Design_rule_for_Camera_File_system)
+  (Wikipedia): cartelle, nomi dei file ed estensione THM per le miniature.

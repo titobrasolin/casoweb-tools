@@ -34,12 +34,22 @@ from casoweb_tools.ambiente import manca_programma
 from casoweb_tools.canon_avi import AUDIO_RATE, build, idit_string, parse_canon
 
 # nome: (larghezza, altezza, fps, qualità -q:v di partenza, dimensione massima di un fotogramma in byte)
+# Modalità e limiti: guida dell'utente Canon della A2000 IS (CDI-E388-010), pp. 90-91.
 PROFILI = {
-    "compatto": (160, 120, 15, 3, 5000),  # verificato su un file Canon reale (massimo osservato: 5272 byte)
-    "320x240": (320, 240, 30, 3, None),  # struttura dedotta, da verificare
-    "640x480": (640, 480, 30, 3, None),  # struttura dedotta, da verificare
+    # Compact. Struttura verificata byte per byte su un file Canon e provata sulla
+    # fotocamera; fotogrammi Canon da 1,7 a 5,3 KB
+    "compatto": (160, 120, 15, 3, 5000),
+    # Standard 320x240. Modalità documentata da Canon; struttura dedotta, nessun file esaminato
+    "320x240": (320, 240, 30, 3, None),
+    # Standard 640x480. Formato osservato con mediainfo su un file Canon (circa 62 KB per
+    # fotogramma); struttura dedotta, non verificata byte per byte
+    "640x480": (640, 480, 30, 3, None),
 }
 VERIFICATI = {"compatto"}
+# durata massima di un clip registrato dalla fotocamera (circa 3 minuti in Compact, 1 ora in
+# Standard) e dimensione massima del file in Standard (4 GB)
+DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600}
+DIMENSIONE_MASSIMA = 4 * 1024 ** 3
 
 
 @dataclass
@@ -199,6 +209,8 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
                "-flags", "+bitexact", str(tmp / "t.jpg"))
         thm = thm_da_modello(modello, (tmp / "t.jpg").read_bytes(), quando, o.cartella_fotocamera * 10000 + o.numero, n)
 
+    for avviso in avvisi_limiti(o.profilo, n / fps, len(avi)):
+        print(f"Attenzione: {avviso}")
     nome = f"MVI_{o.numero:04d}"
     o.cartella.mkdir(parents=True, exist_ok=True)
     out_avi, out_thm = o.cartella / f"{nome}.AVI", o.cartella / f"{nome}.THM"
@@ -206,6 +218,22 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
     out_thm.write_bytes(thm)
     print(f"Creati {nome}.AVI ({len(avi) // 1024} KiB, {n} fotogrammi, {n / fps:.1f} s) e {nome}.THM in {o.cartella}")
     return out_avi, out_thm
+
+
+def avvisi_limiti(profilo: str, secondi: float, dimensione: int) -> list[str]:
+    """Avvisi quando il video supera ciò che la fotocamera stessa registrerebbe in quella modalità.
+
+    Non si sa se la fotocamera rifiuti un file oltre questi limiti: l'avviso serve a non
+    scoprirlo per caso.
+    """
+    avvisi = []
+    limite = DURATA_MASSIMA[profilo]
+    if secondi > limite:
+        avvisi.append(f"{secondi:.0f} s superano la durata massima di un clip in questa modalità "
+                      f"(circa {limite // 60} min): con --durata {limite} si resta nei limiti.")
+    if dimensione > DIMENSIONE_MASSIMA:
+        avvisi.append("il file supera i 4 GB, oltre i quali la fotocamera interrompe la registrazione.")
+    return avvisi
 
 
 def verifica(percorso: Path) -> bool:

@@ -139,3 +139,11 @@ def test_cli_numero_fuori_intervallo(tmp_path):
     f.touch()
     res = CliRunner().invoke(main, ["video-per-canon", str(f), "--numero", "0", "--thm-modello", str(f)])
     assert res.exit_code == 2 and "--numero" in res.output
+
+
+def test_avvisi_limiti():
+    assert vc.avvisi_limiti("compatto", 180, 10_000) == []
+    (avviso,) = vc.avvisi_limiti("compatto", 200, 10_000)
+    assert "circa 3 min" in avviso and "--durata 180" in avviso
+    assert vc.avvisi_limiti("640x480", 600, 10_000) == []
+    assert any("4 GB" in a for a in vc.avvisi_limiti("640x480", 600, 5 * 1024 ** 3))
