@@ -23,18 +23,21 @@ from __future__ import annotations
 
 import bisect
 import json
+import logging
 import os
 import shutil
 import re
 import subprocess
-import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
+from casoweb_tools import log
 from casoweb_tools.ambiente import manca_programma
+
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
@@ -79,10 +82,6 @@ class Opzioni:
 # --------------------------------------------------------------------------
 # Utilità
 # --------------------------------------------------------------------------
-def log(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
-
-
 def fmt_mmss(t: float) -> str:
     return f"{int(t // 60):02d}:{t % 60:06.3f}"
 
@@ -148,13 +147,16 @@ def segment_audio(path: Path) -> list[tuple[str, float, float]]:
     import warnings
 
     warnings.filterwarnings("ignore", category=UserWarning, module="keras")
+    logger.debug("Carico inaSpeechSegmenter (TensorFlow)...")
     from inaSpeechSegmenter import Segmenter
 
-    log("Segmentazione parlato/musica (inaSpeechSegmenter)...")
+    logger.debug("inaSpeechSegmenter caricato")
+
+    logger.info("Segmentazione parlato/musica (inaSpeechSegmenter)...")
     t0 = time.time()
     seg = Segmenter(vad_engine="smn", detect_gender=False)
     raw = seg(str(path))
-    log(f"  fatto in {time.time() - t0:.0f} s, {len(raw)} segmenti grezzi")
+    logger.info(f"  fatto in {time.time() - t0:.0f} s, {len(raw)} segmenti grezzi")
     return [(str(lab), float(s), float(e)) for lab, s, e in raw]
 
 
@@ -230,6 +232,7 @@ def ffmpeg_decode(path: Path, sr: int, channels: int) -> subprocess.Popen:
     """ffmpeg che decodifica la prima traccia audio in PCM s16le su stdout."""
     cmd = ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a:0", "-vn",
            "-ac", str(channels), "-ar", str(sr), "-f", "s16le", "-"]
+    logger.debug(f"Avvio: {' '.join(cmd)}")
     return subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
 
@@ -239,6 +242,7 @@ def ffmpeg_encode(out: Path, bitrate: str | None) -> subprocess.Popen:
         extra[extra.index("-b:a") + 1] = bitrate
     cmd = ["ffmpeg", "-v", "error", "-y", "-f", "s16le", "-ar", str(SR), "-ac", "2",
            "-i", "-", *extra, str(out)]
+    logger.debug(f"Avvio: {' '.join(cmd)}")
     return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 
@@ -275,8 +279,8 @@ def render_audio(path: Path, intervals, out_cut: Path | None, out_mute: Path | N
                 inside |= (t >= s) & (t < e)
             encs["cut"].stdin.write(y[inside].tobytes())
         n0 += len(x)
-        print(f"\r  montaggio audio {fmt_mmss(n0 / SR)}", end="", file=sys.stderr, flush=True)
-    print(file=sys.stderr)
+        log.progresso(f"  montaggio audio {fmt_mmss(n0 / SR)}")
+    log.fine_progresso()
     if dec.wait() != 0:
         raise SystemExit(f"ffmpeg non riesce a leggere {path}")
     for k, p in encs.items():
@@ -348,15 +352,19 @@ def preload_cuda_libs() -> None:
 
 
 def load_model(name: str, device: str, compute_type: str = "auto"):
+    logger.debug("Carico faster-whisper (CTranslate2)...")
     import ctranslate2
     from faster_whisper import WhisperModel
+
+    logger.debug(f"CTranslate2 {ctranslate2.__version__} caricato")
 
     use_cuda = False
     if device in ("auto", "cuda"):
         preload_cuda_libs()
         try:
             use_cuda = ctranslate2.get_cuda_device_count() > 0
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Ricerca delle GPU CUDA fallita: {exc}")
             use_cuda = False
         if device == "cuda" and not use_cuda:
             raise SystemExit("Nessuna GPU CUDA disponibile per CTranslate2.")
@@ -366,7 +374,7 @@ def load_model(name: str, device: str, compute_type: str = "auto"):
             supported = ctranslate2.get_supported_compute_types("cuda")
             ctype = next((c for c in ("float16", "int8_float16", "int8_float32", "int8") if c in supported),
                          "float32")
-        log(f"Whisper '{name}' su GPU (compute_type={ctype})")
+        logger.info(f"Whisper '{name}' su GPU (compute_type={ctype})")
         try:
             model = WhisperModel(name, device="cuda", compute_type=ctype)
             # prova a vuoto: gli errori di cuBLAS/cuDNN emergono solo alla prima trascrizione
@@ -375,9 +383,9 @@ def load_model(name: str, device: str, compute_type: str = "auto"):
         except Exception as exc:
             if device == "cuda":
                 raise
-            log(f"GPU non utilizzabile ({exc}); ripiego sul processore.")
+            logger.warning(f"GPU non utilizzabile ({exc}); ripiego sul processore.")
     ctype = "int8" if compute_type == "auto" else compute_type
-    log(f"Whisper '{name}' su CPU ({ctype})")
+    logger.info(f"Whisper '{name}' su CPU ({ctype})")
     return WhisperModel(name, device="cpu", compute_type=ctype, cpu_threads=os.cpu_count() or 2), "cpu"
 
 
@@ -400,8 +408,8 @@ def run_whisper(model, audio: np.ndarray, total: float, args: Opzioni):
         for w in seg.words or []:
             words.append({"s": float(w.start), "e": float(w.end), "w": w.word})
         done = min(seg.end / total, 1.0) if total else 0
-        print(f"\r  trascrizione {done * 100:5.1f}%  ({time.time() - t0:.0f} s)", end="", file=sys.stderr, flush=True)
-    print(file=sys.stderr)
+        log.progresso(f"  trascrizione {done * 100:5.1f}%  ({time.time() - t0:.0f} s)")
+    log.fine_progresso()
     return words
 
 
@@ -420,7 +428,7 @@ def transcribe_intervals(todo, mono: np.ndarray, args: Opzioni, state) -> list[d
         cuda_err = re.search(r"cuda|cublas|cudnn|libcu|CUDA", str(exc), re.I)
         if state.get("device") != "cuda" or args.device == "cuda" or not cuda_err:
             raise
-        log(f"\nGPU non utilizzabile ({exc}); ripiego sul processore.")
+        logger.warning(f"GPU non utilizzabile ({exc}); ripiego sul processore.")
         state["model"], state["device"] = load_model(args.modello, "cpu", args.compute_type)
         rel = run_whisper(state["model"], audio, total, args)
 
@@ -523,18 +531,18 @@ def run(input: Path, args: Opzioni) -> None:
 
     # 1) segmentazione (o TSV già presente / corretto a mano)
     if tsv.exists() and not args.risegmenta:
-        log(f"Uso la segmentazione esistente: {tsv.name}")
+        logger.info(f"Uso la segmentazione esistente: {tsv.name}")
         segs = read_tsv(tsv)
     else:
         segs = clean_segments(segment_audio(input), args.min_parlato, args.min_musica)
         write_tsv(tsv, segs)
-        log(f"Segmentazione salvata in {tsv}")
+        logger.info(f"Segmentazione salvata in {tsv}")
     tot = segs[-1][2] if segs else 0
     raw_speech = [(s, e) for lab, s, e in segs if lab == PARLATO]
     tot_sp = sum(e - s for s, e in raw_speech)
-    log(f"Parlato: {tot_sp / 60:.1f} min   Musica: {(tot - tot_sp) / 60:.1f} min   ({len(raw_speech)} tratti di parlato)")
+    logger.info(f"Parlato: {tot_sp / 60:.1f} min   Musica: {(tot - tot_sp) / 60:.1f} min   ({len(raw_speech)} tratti di parlato)")
     if args.solo_segmenti:
-        log("Controlla la colonna 'etichetta' del TSV e rilancia senza --solo-segmenti.")
+        logger.info("Controlla la colonna 'etichetta' del TSV e rilancia senza --solo-segmenti.")
         return
     # margine attorno al parlato: non taglia l'attacco e la coda delle parole
     speech = pad_intervals(raw_speech, args.padding, tot)
@@ -546,19 +554,19 @@ def run(input: Path, args: Opzioni) -> None:
         if old.get("modello") == args.modello:
             data = old
         else:
-            log("Cache di un altro modello: la ignoro.")
+            logger.warning("Cache di un altro modello: la ignoro.")
     todo = [] if args.no_trascrizione else subtract(speech, data["coperto"])
     # i ritagli minimi (es. il solo margine aggiunto a una cache già esistente) farebbero allucinare Whisper
     todo = [(s, e) for s, e in todo if e - s >= 1.0]
 
     if todo:
-        log(f"Da trascrivere: {sum(e - s for s, e in todo) / 60:.1f} min di parlato")
+        logger.info(f"Da trascrivere: {sum(e - s for s, e in todo) / 60:.1f} min di parlato")
         state = {"model": None, "device": None}
         data["parole"] += transcribe_intervals(todo, load_mono16k(input), args, state)
         data["coperto"] = union(list(map(tuple, data["coperto"])) + todo)
         cache.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     elif not args.no_trascrizione:
-        log("Trascrizione già in cache: rigenero solo i sottotitoli.")
+        logger.info("Trascrizione già in cache: rigenero solo i sottotitoli.")
 
     # 3) audio
     if not args.no_audio:
@@ -567,12 +575,12 @@ def run(input: Path, args: Opzioni) -> None:
         render_audio(input, speech, cut, mute, args.dissolvenza, args.bitrate)
         for o in (cut, mute):
             if o:
-                log(f"  {o.name}")
+                logger.info(f"  {o.name}")
 
     # 4) sottotitoli
     if not args.no_trascrizione:
         cues = build_cues(data["parole"], speech, args.max_car, args.max_durata, width=args.max_riga)
         write_srt(args.outdir / f"{stem}_parlato.srt", cues, TimeMap(speech))
         write_srt(args.outdir / f"{stem}_silenziato.srt", cues, None)
-        log(f"Sottotitoli: {len(cues)}  ->  {stem}_parlato.srt, {stem}_silenziato.srt")
-    log(f"Fatto. Cartella: {args.outdir}")
+        logger.info(f"Sottotitoli: {len(cues)}  ->  {stem}_parlato.srt, {stem}_silenziato.srt")
+    logger.info(f"Fatto. Cartella: {args.outdir}")
