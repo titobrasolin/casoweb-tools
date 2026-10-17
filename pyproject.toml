@@ -11,7 +11,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Tito Brasolin" }]
 requires-python = ">=3.10"
-dependencies = ["click>=8.1"]
+dependencies = ["click>=8.1", "click-log>=0.4"]
 
 [project.optional-dependencies]
 # inaSpeechSegmenter (tensorflow) non ha ancora ruote per Python 3.13
@@ -26,7 +26,7 @@ cpu = ["tensorflow-cpu; python_version < '3.13'"]
 dev = ["pytest", "numpy"]
 
 [project.scripts]
-casoweb = "casoweb_tools.cli:main"
+casoweb = "casoweb_tools.cli:avvia"
 
 [project.urls]
 Homepage = "https://github.com/titobrasolin/casoweb-tools"

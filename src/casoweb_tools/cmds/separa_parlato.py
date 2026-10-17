@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 
 import click
@@ -12,6 +13,32 @@ from casoweb_tools import ambiente
 FORMATI = ("mp3", "m4a", "opus", "flac", "wav")  # le chiavi di CODEC nel modulo core
 DIPENDENZE = ("numpy", "inaSpeechSegmenter", "faster_whisper")
 EXTRA = ambiente.Extra("separa-parlato", max_python=(3, 12), variante_cpu=True)
+
+logger = logging.getLogger(__name__)
+SEGMENTAZIONE = "TensorFlow (inaSpeechSegmenter, per la segmentazione)"
+
+
+def percorso_tsv(input: Path, outdir: Path | None) -> Path:
+    """Dove separa_parlato.run cerca e scrive la segmentazione (stessa regola)."""
+    return (outdir or input.parent / f"{input.stem}_output") / f"{input.stem}_segmenti.tsv"
+
+
+def requisiti_cpu(segmenta: bool = True, trascrive: bool = True) -> dict[str, set[str]]:
+    """Istruzioni del processore che le librerie precompilate richiedono, per i passi da fare.
+
+    TensorFlow si carica solo per segmentare (senza TSV o con --risegmenta), CTranslate2 solo
+    per trascrivere. Fonti: TensorFlow usa AVX dalla 1.6; CTranslate2 richiede almeno SSE4.1
+    (pagina "Hardware support"); NumPy dalla 2.4 richiede il livello x86-64-v2.
+    """
+    req = {}
+    if segmenta:
+        req[SEGMENTAZIONE] = {"avx"}
+    if trascrive:
+        req["CTranslate2 (faster-whisper)"] = {"sse4_1"}
+    numpy = ambiente.versione_installata("numpy")
+    if numpy is None or numpy >= (2, 4):  # se manca, si installerà la versione più recente
+        req["NumPy 2.4 o successivo"] = {"ssse3", "sse4_1", "sse4_2", "popcnt"}
+    return req
 
 
 @click.command(
@@ -80,9 +107,29 @@ def separa_parlato(input: Path, **opzioni) -> None:
 
     Richiede ffmpeg di sistema e l'extra "separa-parlato" (vedi README).
     """
+    istruzioni = ambiente.istruzioni_cpu()
+    logger.debug(f"Istruzioni del processore rilevanti: "
+                 f"{sorted(istruzioni & {'ssse3', 'sse4_1', 'sse4_2', 'popcnt', 'avx', 'avx2'}) if istruzioni else '?'}")
+    tsv = percorso_tsv(input, opzioni["outdir"])
+    segmenta = opzioni["risegmenta"] or not tsv.exists()
+    trascrive = not (opzioni["no_trascrizione"] or opzioni["solo_segmenti"])
+    req = requisiti_cpu(segmenta, trascrive)
+    suggerimento = None
+    if istruzioni is not None and segmenta:
+        resto = set().union(*(v for k, v in req.items() if k != SEGMENTAZIONE))
+        if not resto - istruzioni:  # manca solo ciò che serve a segmentare: il resto gira qui
+            suggerimento = ("Su questo PC funziona tutto il resto: crea la segmentazione su un PC più recente\n"
+                            f"  casoweb separa-parlato {input.name} --solo-segmenti\n"
+                            f"e copia il TSV in\n  {tsv}\n"
+                            "(oppure scrivilo a mano), poi rilancia qui lo stesso comando.")
+    if (msg := ambiente.manca_cpu(req, istruzioni, suggerimento)) is not None:
+        raise click.ClickException(msg)
     mancanti = [m for m in DIPENDENZE if importlib.util.find_spec(m) is None]
     if mancanti:
         raise click.ClickException(ambiente.manca_extra(EXTRA, mancanti))
+    logger.debug("Carico NumPy...")
     from casoweb_tools import separa_parlato as core
+
+    logger.debug(f"NumPy {core.np.__version__} caricato")
 
     core.run(input, core.Opzioni(**opzioni))
