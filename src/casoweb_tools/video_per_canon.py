@@ -164,7 +164,7 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
         vecchi = u16(voff + 2 * 2)
         for pos in (2, 4):
             struct.pack_into("<H", tiff, voff + 2 * pos, fotogrammi)
-        voff = u32(ent[0x000D] + 8)  # tabella a 32 bit: la posizione 92 ripete il n. fotogrammi
+        voff = u32(ent[0x000D] + 8)  # tabella a 32 bit: in alcuni THM la posizione 92 ripete il n. fotogrammi
         if u32(voff + 4 * 92) == vecchi:
             struct.pack_into("<I", tiff, voff + 4 * 92, fotogrammi)
     voff = u32(ent[0x0011] + 8)  # [1], [6] e [9] = fps; [8] = 2 in Compact, 0 in Standard; [19] = 1 se LP

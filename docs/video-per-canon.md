@@ -19,13 +19,27 @@ Ogni affermazione qui sotto ha una fonte, indicata così:
 |---|---|---|---|---|
 | Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
 | Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]** |
-| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]** |
-| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**; stesso AVI dello Standard con fotogrammi più compressi **[ispezione]** |
+| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]** |
 
 Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
 dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
 e audio WAVE mono a 8 bit **[Canon]**; la frequenza, che Canon arrotonda a
 "11 kHz", è in realtà **11024 Hz** **[ispezione]**.
+
+Nei clip esaminati (uno per modalità, circa 3 secondi ciascuno) i fotogrammi
+hanno queste dimensioni e queste tabelle di quantizzazione (primi valori
+della tabella della luma) **[ispezione]**:
+
+| Modalità | Fotogramma minimo / medio / massimo | Tabella della luma |
+|---|---|---|
+| Compact 160x120 | 4,3 / 5,5 / 5,6 KB | 2, 2, 2, 3, ... |
+| Standard 320x240 | 11 / 21 / 22 KB | 2, 2, 2, 3, ... |
+| Standard 640x480 | 31 / 61 / 68 KB | 2, 2, 2, 3, ... |
+| Standard LP 640x480 | 13 / 30 / 34 KB | 5, 5, 5, 7, ... |
+
+LP quindi usa la stessa struttura con una quantizzazione più grossa, che
+dimezza circa i fotogrammi.
 
 ## Come la fotocamera trova i file
 
@@ -76,6 +90,12 @@ valore 11, che cresce da un clip all'altro come un contatore
 di significato ignoto. La fotocamera accetta un THM così ottenuto: un
 video 640x480 con il THM di un clip Compact si riproduce **[prova]**.
 
+Il codice aggiorna anche il valore 92 della tabella `0x000D`, ma solo se
+coincide con il numero di fotogrammi del modello, come in un THM esaminato
+in precedenza. Nei quattro THM di cui sopra non coincide (vale 98 o 103,
+senza relazione con i fotogrammi), quindi resta com'è, e il video 640x480
+appena citato si riproduce comunque **[prova]**.
+
 Il messaggio "Immagine non identificata" è quello che la guida prevede per
 immagini "manipolate su un computer, rinominate o riprese con un'altra
 fotocamera" **[Canon]** (p. 93 e risoluzione dei problemi): la fotocamera
@@ -97,8 +117,10 @@ andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
   ffmpeg fa il contrario;
 - la durata del fotogramma troncata (66666 µs a 15 fps), la data nel blocco
   `IDIT` e il programma "CanonMVI06";
-- l'audio lungo quanto il video, arrotondato per eccesso: 80 fotogrammi a
-  30 fps danno 29397,33 campioni, e l'ultimo blocco porta il totale a 29398.
+- l'audio lungo quanto il video, arrotondato per eccesso al campione: 80
+  fotogrammi a 30 fps sono 29397,33 campioni, e la fotocamera ne scrive
+  29398 (due blocchi da 11024 e un ultimo blocco, più corto, da 7350).
+  Lo stesso vale per tutti e quattro i clip esaminati.
 
 Anche i fotogrammi sono diversi da quelli di ffmpeg **[ispezione]**:
 marcatore `AVI1` al posto di `JFIF`, un `DRI`, le due tabelle di
@@ -113,12 +135,15 @@ croma 1x2 (blocchi di 16x16): un JPEG valido, che però la fotocamera a
 intero con l'audio giusto **[prova]**. Nessuna opzione di ffmpeg cambia il
 campionamento, perciò `video-per-canon` usa ffmpeg solo per decodificare e
 ridimensionare, e codifica i fotogrammi con Pillow, che produce lo stesso
-campionamento della Canon. Anche le miniature dei THM Canon sono così.
+campionamento della Canon. Anche le miniature dei THM Canon sono 4:2:2 a
+blocchi 16x8, con un solo `DQT` e, a differenza dei fotogrammi, un solo
+`DHT` con tutte le tabelle Huffman **[ispezione]**: `video-per-canon` le
+costruisce allo stesso modo.
 
 `casoweb_tools.canon_avi` riproduce questa struttura: rigenerando un AVI
 della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un file
-**identico byte per byte**, in tutte e tre le modalità Compact, 320x240 e
-640x480 **[ispezione]**. A 30 fps ogni blocco ha un secondo di audio e 30
+**identico byte per byte**, in tutte le modalità: Compact, 320x240, 640x480
+e 640x480 LP **[ispezione]**. A 30 fps ogni blocco ha un secondo di audio e 30
 fotogrammi.
 
 ## Uso
@@ -135,9 +160,16 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
   dato di una fotocamera specifica.
 - `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
   THM.
-- Lo script alza la compressione finché il fotogramma più pesante resta
-  sotto il limite del profilo: circa 5 KB nel 160x120, come nei file Canon
-  **[ispezione]**. Stampa poi dimensione media e massima.
+- I fotogrammi partono da qualità JPEG 92 (`--qualita`, da 1 a 95), che
+  dà tabelle di quantizzazione vicine a quelle Canon. Nel profilo
+  `compatto` lo script abbassa la qualità finché il fotogramma più pesante
+  resta sotto i 5000 byte (`--max-fotogramma`): un limite prudenziale, un
+  po' sotto i 5,6 KB del clip Compact esaminato (vedi sotto). Stampa poi
+  dimensione media e massima.
+- La miniatura del THM è il primo fotogramma del video: se il video inizia
+  con una dissolvenza, in galleria compare quasi nera.
+- Servono ffmpeg, per decodificare il video, e Pillow, per codificare i
+  JPEG (si installa con il pacchetto).
 - Avvisa quando il video supera la durata massima che la fotocamera
   registrerebbe in quella modalità (3 minuti in Compact) o i 4 GB. Non si
   sa se la fotocamera rifiuti un file più lungo **[deduzione]**: l'avviso
@@ -152,20 +184,22 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | Catalogo `.CTG` | non serve **[prova]** |
 | AVI rimuxato da ffmpeg | rifiutato **[prova]** |
 | AVI di `canon_avi` con fotogrammi Canon e THM coerente | si riproduce **[prova]** |
-| Video qualsiasi convertito, profilo `compatto` | si riproduce **[prova]** |
+| Video qualsiasi convertito, profilo `compatto`, JPEG di ffmpeg (16x16) | si riproduce **[prova]** |
+| Video qualsiasi convertito, profilo `compatto`, JPEG di Pillow (16x8) | da riprovare sulla fotocamera |
 | THM con numero del file non aggiornato | si riproduce **[prova]** |
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
-| Struttura AVI dei profili `320x240` e `640x480` | rigenerata identica da file Canon **[ispezione]** |
+| Struttura AVI di 320x240, 640x480 e 640x480 LP | rigenerata identica da file Canon **[ispezione]** |
 | Video convertito a 640x480 con i JPEG di ffmpeg (16x16), THM da un clip Compact | si riproduce per intero con l'audio, ma a strisce verdi **[prova]** |
 | Video convertito a 640x480 con i JPEG di Pillow (16x8), THM da un clip Compact | si riproduce correttamente **[prova]** |
 | Video convertito, profilo `320x240` | da provare sulla fotocamera |
-| Modalità LP | AVI identico allo Standard con fotogrammi circa a metà (30 KB invece di 61 KB); il THM ha un indicatore LP **[ispezione]**. Nessun profilo per ora |
+| Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]**. Nessun profilo per ora |
 | Clip più lunghi della durata massima | da provare |
 
-Resta aperto se l'arresto dopo 5 secondi osservato con fotogrammi da 6-7 KB
-dipendesse dalla loro dimensione o dai metadati incoerenti, perché nella
-prova successiva sono cambiate entrambe le cose. Per prudenza il limite
-resta.
+Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con
+fotogrammi da 6-7 KB dipendesse dalla loro dimensione o dai metadati
+incoerenti, perché nella prova successiva sono cambiate entrambe le cose.
+Per prudenza il limite resta, anche se il clip Compact esaminato poi arriva
+a 5,6 KB.
 
 Per confermare un profilo serve un esemplare vero di quella modalità
 (bastano pochi secondi di AVI e THM): se

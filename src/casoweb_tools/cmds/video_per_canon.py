@@ -48,7 +48,7 @@ def video_per_canon(ingresso: Path | None, verifica_avi: Path | None, numero: in
     Le PowerShot mostrano un video copiato sulla scheda solo se è costruito
     esattamente come i loro (AVI Motion JPEG "CanonMVI06", audio 8 bit mono
     a 11024 Hz) e se accanto c'è un .THM coerente con l'AVI. Provato sulla
-    A2000 IS nel profilo 160x120 a 15 fps. Richiede ffmpeg.
+    A2000 IS nei profili 160x120 a 15 fps e 640x480 a 30 fps. Richiede ffmpeg.
     """
     if verifica_avi is not None:
         if not core.verifica(verifica_avi):
