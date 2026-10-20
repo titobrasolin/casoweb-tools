@@ -20,26 +20,34 @@ Ogni affermazione qui sotto ha una fonte, indicata così:
 | Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
 | Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]** |
 | Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
-| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]** |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480-lp`: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]** |
 
 Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
 dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
 e audio WAVE mono a 8 bit **[Canon]**; la frequenza, che Canon arrotonda a
 "11 kHz", è in realtà **11024 Hz** **[ispezione]**.
 
-Nei clip esaminati (uno per modalità, circa 3 secondi ciascuno) i fotogrammi
-hanno queste dimensioni e queste tabelle di quantizzazione (primi valori
-della tabella della luma) **[ispezione]**:
+La fotocamera regola la compressione durante la ripresa **[ispezione]**:
+ogni due fotogrammi può cambiare le tabelle di quantizzazione, che nei
+primi fotogrammi sono grossolane e poi si assestano. Le tabelle sono sue,
+non quelle standard del JPEG in scala. Per confrontarle con Pillow si
+cerca la qualità di Pillow con le tabelle più vicine (somma delle
+differenze di tutti i 128 valori). Nei clip esaminati (uno per modalità,
+circa 3 secondi ciascuno) **[ispezione]**:
 
-| Modalità | Fotogramma minimo / medio / massimo | Tabella della luma |
+| Modalità | Fotogramma minimo / medio / massimo | Qualità Pillow equivalente: all'inizio, poi a regime |
 |---|---|---|
-| Compact 160x120 | 4,3 / 5,5 / 5,6 KB | 2, 2, 2, 3, ... |
-| Standard 320x240 | 11 / 21 / 22 KB | 2, 2, 2, 3, ... |
-| Standard 640x480 | 31 / 61 / 68 KB | 2, 2, 2, 3, ... |
-| Standard LP 640x480 | 13 / 30 / 34 KB | 5, 5, 5, 7, ... |
+| Compact 160x120 | 4,3 / 5,5 / 5,6 KB | 85, poi 90 |
+| Standard 320x240 | 11 / 21 / 22 KB | 75 e 85, poi 90 |
+| Standard 640x480 | 31 / 61 / 68 KB | 68 e 82, poi alterna 85 e 88 |
+| Standard LP 640x480 | 13 / 30 / 34 KB | 25, 45, poi alterna 68 e 75 |
 
-LP quindi usa la stessa struttura con una quantizzazione più grossa, che
-dimezza circa i fotogrammi.
+A 640x480 la qualità a regime alterna due valori, come se la fotocamera
+inseguisse un bitrate: circa 61 KB per fotogramma in Standard, circa 30 KB
+in LP **[deduzione]**. LP quindi usa la stessa struttura con una
+quantizzazione più grossa, che dimezza circa i fotogrammi. I profili di
+`video-per-canon` partono dalla qualità a regime: 90 per `compatto` e
+`320x240`, 86 per `640x480`, 72 per `640x480-lp`.
 
 ## Come la fotocamera trova i file
 
@@ -81,9 +89,9 @@ Standard 320, Compact) **[ispezione]**:
 | tabella `0x0011`, valore 19 | 1 in Standard LP, 0 altrimenti |
 | tabella `0x0026`, valori 4 e 5 | larghezza e altezza del video |
 
-`video-per-canon` aggiorna tutti questi valori secondo il profilo e azzera
-l'indicatore LP, quindi il THM modello può venire da un clip di qualsiasi
-modalità. Partendo dal THM Compact o da quello LP e portandoli a Standard
+`video-per-canon` aggiorna tutti questi valori secondo il profilo, compreso
+l'indicatore LP (1 solo con `640x480-lp`), quindi il THM modello può venire
+da un clip di qualsiasi modalità. Partendo dal THM Compact o da quello LP e portandoli a Standard
 640, la tabella `0x0011` coincide con quella del THM Standard 640, salvo il
 valore 11, che cresce da un clip all'altro come un contatore
 **[ispezione]**. Nella tabella `0x0026` restano diversi i valori 44 e 47,
@@ -160,8 +168,10 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
   dato di una fotocamera specifica.
 - `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
   THM.
-- I fotogrammi partono da qualità JPEG 92 (`--qualita`, da 1 a 95), che
-  dà tabelle di quantizzazione vicine a quelle Canon. Nel profilo
+- I fotogrammi partono dalla qualità JPEG che la fotocamera tiene a regime
+  in quella modalità (vedi sopra; si cambia con `--qualita`, da 1 a 95). La
+  qualità resta fissa per tutto il video, senza il controllo del bitrate
+  della fotocamera. Nel profilo
   `compatto` lo script abbassa la qualità finché il fotogramma più pesante
   resta sotto i 5000 byte (`--max-fotogramma`): un limite prudenziale, un
   po' sotto i 5,6 KB del clip Compact esaminato (vedi sotto). Stampa poi
@@ -191,9 +201,10 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
 | Struttura AVI di 320x240, 640x480 e 640x480 LP | rigenerata identica da file Canon **[ispezione]** |
 | Video convertito a 640x480 con i JPEG di ffmpeg (16x16), THM da un clip Compact | si riproduce per intero con l'audio, ma a strisce verdi **[prova]** |
-| Video convertito a 640x480 con i JPEG di Pillow (16x8), THM da un clip Compact | si riproduce correttamente **[prova]** |
+| Video convertito a 640x480 con i JPEG di Pillow (16x8, qualità 92), THM da un clip Compact | si riproduce correttamente **[prova]** |
 | Video convertito, profilo `320x240` | da provare sulla fotocamera |
-| Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]**. Nessun profilo per ora |
+| Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]** |
+| Video convertito, profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]**; da provare sulla fotocamera |
 | Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con

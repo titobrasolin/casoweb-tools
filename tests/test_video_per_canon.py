@@ -130,7 +130,8 @@ def test_patch_exif_aggiorna_numero_fotogrammi_e_date(tmp_path):
 @needs_ffmpeg
 def test_patch_exif_da_modello_compact_a_standard(tmp_path):
     modello = thm(_jpeg(tmp_path))
-    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480), 0)
+    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480),
+                              vc.MODALITA_THM["640x480"])
     mn = leggi_makernote(nuovo)
     assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (0, 0), (640, 480))
 
@@ -138,9 +139,23 @@ def test_patch_exif_da_modello_compact_a_standard(tmp_path):
 @needs_ffmpeg
 def test_patch_exif_azzera_indicatore_lp(tmp_path):
     modello = thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), codice_modalita=0, lp=1)
-    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 45, 15, (160, 120), 2)
+    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 45, 15, (160, 120),
+                              vc.MODALITA_THM["compatto"])
     mn = leggi_makernote(nuovo)
     assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
+
+
+@needs_ffmpeg
+def test_patch_exif_imposta_indicatore_lp(tmp_path):
+    modello = thm(_jpeg(tmp_path))
+    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480),
+                              vc.MODALITA_THM["640x480-lp"])
+    mn = leggi_makernote(nuovo)
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (0, 1), (640, 480))
+
+
+def test_ogni_profilo_ha_modalita_e_durata():
+    assert set(vc.PROFILI) == set(vc.MODALITA_THM) == set(vc.DURATA_MASSIMA)
 
 
 def test_thm_modello_senza_exif():

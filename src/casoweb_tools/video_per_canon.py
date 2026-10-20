@@ -41,24 +41,29 @@ from casoweb_tools.canon_avi import AUDIO_RATE, build, campioni_audio, idit_stri
 
 # nome: (larghezza, altezza, fps, qualità JPEG di partenza, dimensione massima di un fotogramma in byte)
 # Modalità e limiti: guida dell'utente Canon della A2000 IS (CDI-E388-010), pp. 90-91.
-# Qualità 92: tabelle di quantizzazione vicine a quelle Canon (2, 2, 2, 3 ... in Standard).
+# Qualità: quella a cui la fotocamera si stabilizza dopo i primi fotogrammi (ha un controllo
+# del bitrate), espressa come la qualità Pillow con le tabelle di quantizzazione più vicine.
 PROFILI = {
     # Compact. Struttura verificata byte per byte su un file Canon e provata sulla
-    # fotocamera; fotogrammi Canon da 1,7 a 5,6 KB
-    "compatto": (160, 120, 15, 92, 5000),
+    # fotocamera; fotogrammi Canon da 1,7 a 5,6 KB, qualità ~90
+    "compatto": (160, 120, 15, 90, 5000),
     # Standard 320x240. Struttura verificata byte per byte su un file Canon (fotogrammi
-    # da 11 a 22 KB); conversione non ancora provata sulla fotocamera
-    "320x240": (320, 240, 30, 92, None),
+    # da 11 a 22 KB, qualità ~90); conversione non ancora provata sulla fotocamera
+    "320x240": (320, 240, 30, 90, None),
     # Standard 640x480. Struttura verificata byte per byte su file Canon (fotogrammi fino a
-    # 68 KB); conversione provata sulla fotocamera
-    "640x480": (640, 480, 30, 92, None),
+    # 68 KB, qualità tra 85 e 88); conversione provata sulla fotocamera
+    "640x480": (640, 480, 30, 86, None),
+    # Standard LP 640x480: stessa struttura (verificata byte per byte su un file Canon) con
+    # fotogrammi circa a metà (fino a 34 KB, qualità tra 68 e 75); non ancora provata
+    "640x480-lp": (640, 480, 30, 72, None),
 }
-VERIFICATI = {"compatto", "320x240", "640x480"}
-# codice della modalità nel THM (tabella 0x0011, valore 8), osservato su clip della fotocamera
-CODICE_MODALITA = {"compatto": 2, "320x240": 0, "640x480": 0}
+VERIFICATI = {"compatto", "320x240", "640x480", "640x480-lp"}
+# modalità nel THM (tabella 0x0011): (valore 8: 2 in Compact, 0 in Standard; valore 19: 1 se LP),
+# osservata su clip della fotocamera
+MODALITA_THM = {"compatto": (2, 0), "320x240": (0, 0), "640x480": (0, 0), "640x480-lp": (0, 1)}
 # durata massima di un clip registrato dalla fotocamera (circa 3 minuti in Compact, 1 ora in
 # Standard) e dimensione massima del file in Standard (4 GB)
-DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600}
+DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600, "640x480-lp": 3600}
 DIMENSIONE_MASSIMA = 4 * 1024 ** 3
 
 
@@ -129,10 +134,10 @@ def _tiff_ifd(tiff: bytes, off: int) -> dict[int, int]:
 
 def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file: int | None = None,
                fotogrammi: int | None = None, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
-               codice_modalita: int | None = None) -> bytes:
+               modalita: tuple[int, int] | None = None) -> bytes:
     """Aggiorna nel blocco Exif del THM: date, numero del file (cartella*10000+numero) e dati del video.
 
-    Con codice_modalita si azzera anche l'indicatore LP: nessun profilo produce video LP.
+    modalita: (codice della modalità, indicatore LP), come in MODALITA_THM.
     """
     app1 = bytearray(app1)
     if quando is not None:
@@ -164,9 +169,9 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
     if fps is not None:
         for pos in (1, 6, 9):
             struct.pack_into("<H", tiff, voff + 2 * pos, fps)
-    if codice_modalita is not None:
-        struct.pack_into("<H", tiff, voff + 2 * 8, codice_modalita)
-        struct.pack_into("<H", tiff, voff + 2 * 19, 0)
+    if modalita is not None:
+        struct.pack_into("<H", tiff, voff + 2 * 8, modalita[0])
+        struct.pack_into("<H", tiff, voff + 2 * 19, modalita[1])
     if dimensioni is not None and 0x0026 in ent:  # tabella a 16 bit: [4] e [5] = larghezza e altezza
         voff = u32(ent[0x0026] + 8)
         struct.pack_into("<2H", tiff, voff + 2 * 4, *dimensioni)
@@ -175,11 +180,11 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
 
 def thm_da_modello(modello: bytes, jpeg160: bytes, quando: time.struct_time, numero_file: int,
                    fotogrammi: int, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
-                   codice_modalita: int | None = None) -> bytes:
+                   modalita: tuple[int, int] | None = None) -> bytes:
     if modello[:4] != b"\xff\xd8\xff\xe1":
         raise SystemExit("Il THM modello non ha un blocco Exif: serve un .THM prodotto dalla fotocamera.")
     ln = struct.unpack(">H", modello[4:6])[0]
-    app1 = patch_exif(modello[2:4 + ln], quando, numero_file, fotogrammi, fps, dimensioni, codice_modalita)
+    app1 = patch_exif(modello[2:4 + ln], quando, numero_file, fotogrammi, fps, dimensioni, modalita)
     segs, sos = segmenti(jpeg160)
     # come nei THM Canon: un DQT, il SOF, un DHT con tutte le tabelle
     resto = b"".join(s for m, s in segs if m not in (0xE0, 0xFE, 0xDB, 0xC4))
@@ -261,7 +266,7 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
     # miniatura a un terzo del video: il primo fotogramma è spesso nero (dissolvenze, titoli)
     miniatura = jpeg_422(next(_immagini(ingresso, durata, 160, 120, quante=1, inizio=n / fps / 3)), 90)
     thm = thm_da_modello(modello, miniatura, quando, o.cartella_fotocamera * 10000 + o.numero, n,
-                         fps, (w, h), CODICE_MODALITA[o.profilo])
+                         fps, (w, h), MODALITA_THM[o.profilo])
 
     for avviso in avvisi_limiti(o.profilo, n / fps, len(avi)):
         print(f"Attenzione: {avviso}")
