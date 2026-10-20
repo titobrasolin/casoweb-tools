@@ -17,18 +17,31 @@ jobs:
   pytest:
     # I test non caricano modelli: bastano l'extra "dev" (pytest, numpy) e ffmpeg,
     # senza i ~2 GB dell'extra "separa-parlato".
-    runs-on: ubuntu-latest
+    # Windows con una sola versione di Python: basta a scoprire percorsi e segnali diversi da Linux.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: windows-latest
+            python: "3.13"
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v10.3.0
 
-      - name: ffmpeg
+      - name: ffmpeg (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+
+      - name: ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
 
       - name: Installazione
         run: |
@@ -36,11 +49,11 @@ jobs:
           uv pip install -e '.[dev]'
 
       - name: casoweb --help senza gli extra
-        run: .venv/bin/casoweb --help && .venv/bin/casoweb separa-parlato --help > /dev/null
+        run: uv run --no-sync casoweb --help && uv run --no-sync casoweb separa-parlato --help > /dev/null
 
       - name: pytest
         # -ra elenca i test saltati: se mancasse ffmpeg si vedrebbe subito
-        run: .venv/bin/pytest -ra
+        run: uv run --no-sync pytest -ra
 
   # Unico controllo richiesto dalla regola su main: non va ritoccata se cambia la matrice.
   esito:

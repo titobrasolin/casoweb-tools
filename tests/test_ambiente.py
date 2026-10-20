@@ -29,6 +29,23 @@ def test_installazione_editabile_rilevata():
     assert (amb.sorgente_editabile() / "pyproject.toml").is_file()
 
 
+@pytest.mark.parametrize("url, posix, windows", [
+    ("file:///home/tito/casoweb-tools", "/home/tito/casoweb-tools", None),
+    ("file:///home/tito/Casoweb%20Tools", "/home/tito/Casoweb Tools", None),
+    ("file:///C:/Users/Tito/casoweb-tools", None, "C:\\Users\\Tito\\casoweb-tools"),
+    ("file:///C:/Users/Tito/Casoweb%20Tools", None, "C:\\Users\\Tito\\Casoweb Tools"),
+])
+def test_percorso_da_url(url, posix, windows):
+    atteso = windows if sys.platform == "win32" else posix
+    if atteso is None:
+        pytest.skip("percorso di un altro sistema")
+    assert amb.percorso_da_url(url) == Path(atteso)
+
+
+def test_percorso_da_url_non_file():
+    assert amb.percorso_da_url("https://github.com/titobrasolin/casoweb-tools.git") is None
+
+
 def test_uv_tool_senza_gpu_propone_variante_leggera():
     m = msg(amb.UV_TOOL)
     assert "Nessuna GPU NVIDIA" in m

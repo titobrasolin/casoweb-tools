@@ -16,6 +16,8 @@ import sys
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 REPO = "https://github.com/titobrasolin/casoweb-tools"
 GIT = f"git+{REPO}.git"
@@ -59,8 +61,14 @@ def sorgente_editabile() -> Path | None:
     info = json.loads(raw)
     if not info.get("dir_info", {}).get("editable"):
         return None
-    url = info.get("url", "")
-    return Path(url.removeprefix("file://")) if url.startswith("file://") else None
+    return percorso_da_url(info.get("url", ""))
+
+
+def percorso_da_url(url: str) -> Path | None:
+    """Percorso locale di un URL file://, anche su Windows (file:///C:/... -> C:\\...) e con %20 & co."""
+    if not url.startswith("file://"):
+        return None
+    return Path(url2pathname(urlparse(url).path))
 
 
 def versione_installata(distribuzione: str) -> tuple[int, ...] | None:
