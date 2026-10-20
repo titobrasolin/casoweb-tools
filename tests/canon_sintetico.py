@@ -23,12 +23,17 @@ def _ifd(entries: list[tuple[int, int, int, bytes]], start: int, next_ifd: int =
     return table + struct.pack("<I", next_ifd), extra
 
 
-def thm(jpeg160: bytes, fotogrammi: int = 153, numero_file: int = 1011259) -> bytes:
-    """THM: JPEG con APP1 Exif e MakerNote Canon (tag 0x0008, 0x000d, 0x0011)."""
+def thm(jpeg160: bytes, fotogrammi: int = 153, numero_file: int = 1011259, fps: int = 15,
+        dimensioni: tuple[int, int] = (160, 120), codice_modalita: int = 2, lp: int = 0) -> bytes:
+    """THM: JPEG con APP1 Exif e MakerNote Canon (tag 0x0008, 0x000d, 0x0011, 0x0026)."""
     t16 = [0] * 20
     t16[2] = t16[4] = fotogrammi
+    t16[1] = t16[6] = t16[9] = fps
+    t16[8], t16[19] = codice_modalita, lp
     t32 = [0] * 100
     t32[92] = fotogrammi
+    af = [0] * 48
+    af[4:6] = dimensioni
 
     # disposizione nel TIFF: intestazione (8), IFD0 + data, Exif IFD + data, MakerNote
     exif_at = 8 + (2 + 12 * 2 + 4) + len(DATA)
@@ -37,11 +42,12 @@ def thm(jpeg160: bytes, fotogrammi: int = 153, numero_file: int = 1011259) -> by
         (0x0008, 4, 1, struct.pack("<I", numero_file)),
         (0x000D, 4, len(t32), struct.pack(f"<{len(t32)}I", *t32)),
         (0x0011, 3, len(t16), struct.pack(f"<{len(t16)}H", *t16)),
+        (0x0026, 3, len(af), struct.pack(f"<{len(af)}H", *af)),
     ], mn_at))
     exif = b"".join(_ifd([(0x9003, 2, len(DATA), DATA), (0x927C, 7, len(makernote), makernote)], exif_at))
     ifd0 = b"".join(_ifd([(0x0132, 2, len(DATA), DATA), (0x8769, 4, 1, struct.pack("<I", exif_at))], 8))
     tiff = b"II*\0" + struct.pack("<I", 8) + ifd0 + exif
-    assert tiff[mn_at:mn_at + 2] == struct.pack("<H", 3)
+    assert tiff[mn_at:mn_at + 2] == struct.pack("<H", 4)
 
     payload = b"Exif\0\0" + tiff
     app1 = b"\xff\xe1" + struct.pack(">H", len(payload) + 2) + payload
@@ -52,7 +58,8 @@ def thm(jpeg160: bytes, fotogrammi: int = 153, numero_file: int = 1011259) -> by
 
 
 def leggi_makernote(thm_bytes: bytes) -> dict[str, object]:
-    """Valori che patch_exif aggiorna: numero del file, fotogrammi (tabelle 0x0011 e 0x000d), date."""
+    """Valori che patch_exif aggiorna: numero del file, fotogrammi (tabelle 0x0011 e 0x000d), date,
+    fps, codice della modalità con indicatore LP (tabella 0x0011) e dimensioni (tabella 0x0026)."""
     tiff = thm_bytes[12:]  # FFD8, FFE1, lunghezza, 'Exif\0\0'
 
     def u16(o):
@@ -69,8 +76,12 @@ def leggi_makernote(thm_bytes: bytes) -> dict[str, object]:
     mn = ifd(u32(exif[0x927C] + 8))
     t16 = u32(mn[0x0011] + 8)
     t32 = u32(mn[0x000D] + 8)
+    af = u32(mn[0x0026] + 8)
     return {
         "numero_file": u32(mn[0x0008] + 8),
         "fotogrammi": (u16(t16 + 4), u16(t16 + 8), u32(t32 + 4 * 92)),
         "date": [tiff[u32(e + 8):u32(e + 8) + 19].decode() for e in (ifd0[0x0132], exif[0x9003])],
+        "fps": (u16(t16 + 2), u16(t16 + 12), u16(t16 + 18)),
+        "modalita": (u16(t16 + 16), u16(t16 + 38)),
+        "dimensioni": (u16(af + 8), u16(af + 10)),
     }

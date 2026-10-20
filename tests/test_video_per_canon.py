@@ -102,7 +102,24 @@ def test_patch_exif_aggiorna_numero_fotogrammi_e_date(tmp_path):
     quando = time.localtime(time.mktime((2026, 10, 16, 8, 22, 0, 0, 0, -1)))
     nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), quando, 1011266, 45)
     assert leggi_makernote(nuovo) == {"numero_file": 1011266, "fotogrammi": (45, 45, 45),
-                                      "date": ["2026:10:16 08:22:00"] * 2}
+                                      "date": ["2026:10:16 08:22:00"] * 2, "fps": (15, 15, 15),
+                                      "modalita": (2, 0), "dimensioni": (160, 120)}
+
+
+@needs_ffmpeg
+def test_patch_exif_da_modello_compact_a_standard(tmp_path):
+    modello = thm(_jpeg(tmp_path))
+    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480), 0)
+    mn = leggi_makernote(nuovo)
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (0, 0), (640, 480))
+
+
+@needs_ffmpeg
+def test_patch_exif_azzera_indicatore_lp(tmp_path):
+    modello = thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), codice_modalita=0, lp=1)
+    nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 45, 15, (160, 120), 2)
+    mn = leggi_makernote(nuovo)
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
 
 
 def test_thm_modello_senza_exif():
@@ -119,7 +136,8 @@ def test_conversione_completa(tmp_path):
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=320x240:r=25:d=2",
                     "-f", "lavfi", "-i", "sine=d=2", "-shortest", str(video)], check=True)
     modello = tmp_path / "MVI_1259.THM"
-    modello.write_bytes(thm(_jpeg(tmp_path)))
+    # modello da un clip 640x480 LP: il THM prodotto deve comunque descrivere un Compact
+    modello.write_bytes(thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), codice_modalita=0, lp=1))
     sd = tmp_path / "DCIM" / "101CANON"
 
     res = CliRunner().invoke(main, ["video-per-canon", str(video), "--numero", "1266",
@@ -132,6 +150,7 @@ def test_conversione_completa(tmp_path):
     assert max(len(f) for f in frames) <= vc.PROFILI["compatto"][4] + 40
     mn = leggi_makernote((sd / "MVI_1266.THM").read_bytes())
     assert mn["numero_file"] == 1011266 and mn["fotogrammi"] == (30, 30, 30)
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
 
     res = CliRunner().invoke(main, ["video-per-canon", "--verifica", str(sd / "MVI_1266.AVI")])
     assert res.exit_code == 0 and "identico byte per byte" in res.output

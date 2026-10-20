@@ -27,7 +27,7 @@ Copiare sempre AVI e THM insieme.""",
 @click.argument("ingresso", required=False, type=_FILE)
 @click.option("--numero", type=click.IntRange(1, 9999), help="Numero del file (MVI_NNNN), da 1 a 9999.")
 @click.option("--thm-modello", type=_FILE,
-              help="Un .THM prodotto dalla fotocamera nella modalità del profilo: fornisce il blocco Exif da aggiornare.")
+              help="Un .THM prodotto dalla fotocamera, di qualsiasi modalità: fornisce il blocco Exif da aggiornare.")
 @click.option("--cartella", type=click.Path(file_okay=False, path_type=Path), default=Path("."), show_default=True,
               help="Dove scrivere AVI e THM (es. la cartella DCIM/101CANON della scheda).")
 @click.option("--cartella-fotocamera", type=click.IntRange(100, 999), default=101, show_default=True,

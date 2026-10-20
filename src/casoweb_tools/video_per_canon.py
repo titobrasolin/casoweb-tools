@@ -7,13 +7,15 @@ La fotocamera mostra un video copiato sulla scheda solo se:
   - i fotogrammi JPEG sono "alla Canon": marcatore AVI1 al posto di JFIF,
     un DRI, nessuna tabella Huffman (si usano quelle standard);
   - accanto c'è un .THM con lo stesso numero: JPEG 160x120 con un blocco
-    Exif Canon che contiene anche il numero di fotogrammi, da cui la
+    Exif Canon che contiene anche numero di fotogrammi e fps, da cui la
     fotocamera ricava la durata. Se THM e AVI non concordano, il video
     non parte.
 
 Il THM si costruisce a partire da un THM prodotto dalla fotocamera
-(--thm-modello), di cui si aggiornano date, numero del file e numero di
-fotogrammi: nessun dato di una fotocamera specifica sta nel codice.
+(--thm-modello), di cui si aggiornano date, numero del file e dati del
+video (fotogrammi, fps, dimensioni, modalità): nessun dato di una
+fotocamera specifica sta nel codice, e il modello può venire da un clip
+di qualsiasi modalità.
 
 Interfaccia a riga di comando: `casoweb video-per-canon` (vedi
 casoweb_tools.cmds.video_per_canon).
@@ -47,6 +49,8 @@ PROFILI = {
     "640x480": (640, 480, 30, 3, None),
 }
 VERIFICATI = {"compatto", "320x240", "640x480"}
+# codice della modalità nel THM (tabella 0x0011, valore 8), osservato su clip della fotocamera
+CODICE_MODALITA = {"compatto": 2, "320x240": 0, "640x480": 0}
 # durata massima di un clip registrato dalla fotocamera (circa 3 minuti in Compact, 1 ora in
 # Standard) e dimensione massima del file in Standard (4 GB)
 DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600}
@@ -108,8 +112,12 @@ def _tiff_ifd(tiff: bytes, off: int) -> dict[int, int]:
 
 
 def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file: int | None = None,
-               fotogrammi: int | None = None) -> bytes:
-    """Aggiorna nel blocco Exif del THM: date, numero del file (cartella*10000+numero) e numero di fotogrammi."""
+               fotogrammi: int | None = None, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
+               codice_modalita: int | None = None) -> bytes:
+    """Aggiorna nel blocco Exif del THM: date, numero del file (cartella*10000+numero) e dati del video.
+
+    Con codice_modalita si azzera anche l'indicatore LP: nessun profilo produce video LP.
+    """
     app1 = bytearray(app1)
     if quando is not None:
         data = time.strftime("%Y:%m:%d %H:%M:%S", quando).encode() + b"\0"
@@ -136,15 +144,26 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
         voff = u32(ent[0x000D] + 8)  # tabella a 32 bit: la posizione 92 ripete il n. fotogrammi
         if u32(voff + 4 * 92) == vecchi:
             struct.pack_into("<I", tiff, voff + 4 * 92, fotogrammi)
+    voff = u32(ent[0x0011] + 8)  # [1], [6] e [9] = fps; [8] = 2 in Compact, 0 in Standard; [19] = 1 se LP
+    if fps is not None:
+        for pos in (1, 6, 9):
+            struct.pack_into("<H", tiff, voff + 2 * pos, fps)
+    if codice_modalita is not None:
+        struct.pack_into("<H", tiff, voff + 2 * 8, codice_modalita)
+        struct.pack_into("<H", tiff, voff + 2 * 19, 0)
+    if dimensioni is not None and 0x0026 in ent:  # tabella a 16 bit: [4] e [5] = larghezza e altezza
+        voff = u32(ent[0x0026] + 8)
+        struct.pack_into("<2H", tiff, voff + 2 * 4, *dimensioni)
     return bytes(app1)
 
 
 def thm_da_modello(modello: bytes, jpeg160: bytes, quando: time.struct_time, numero_file: int,
-                   fotogrammi: int) -> bytes:
+                   fotogrammi: int, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
+                   codice_modalita: int | None = None) -> bytes:
     if modello[:4] != b"\xff\xd8\xff\xe1":
         raise SystemExit("Il THM modello non ha un blocco Exif: serve un .THM prodotto dalla fotocamera.")
     ln = struct.unpack(">H", modello[4:6])[0]
-    app1 = patch_exif(modello[2:4 + ln], quando, numero_file, fotogrammi)
+    app1 = patch_exif(modello[2:4 + ln], quando, numero_file, fotogrammi, fps, dimensioni, codice_modalita)
     segs, sos = segmenti(jpeg160)
     resto = b"".join(s for m, s in segs if m not in (0xE0, 0xFE))
     return b"\xff\xd8" + app1 + resto + jpeg160[sos:]
@@ -208,7 +227,8 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
                "-vf", "scale=160:120:force_original_aspect_ratio=decrease,pad=160:120:(ow-iw)/2:(oh-ih)/2,setsar=1",
                "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "3", "-pix_fmt", "yuvj422p", "-huffman", "default",
                "-flags", "+bitexact", str(tmp / "t.jpg"))
-        thm = thm_da_modello(modello, (tmp / "t.jpg").read_bytes(), quando, o.cartella_fotocamera * 10000 + o.numero, n)
+        thm = thm_da_modello(modello, (tmp / "t.jpg").read_bytes(), quando, o.cartella_fotocamera * 10000 + o.numero, n,
+                             fps, (w, h), CODICE_MODALITA[o.profilo])
 
     for avviso in avvisi_limiti(o.profilo, n / fps, len(avi)):
         print(f"Attenzione: {avviso}")
