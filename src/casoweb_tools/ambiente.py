@@ -9,6 +9,8 @@ quando mancano le dipendenze.
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -61,6 +63,29 @@ def sorgente_editabile() -> Path | None:
     return Path(url.removeprefix("file://")) if url.startswith("file://") else None
 
 
+def versione_installata(distribuzione: str) -> tuple[int, ...] | None:
+    """Versione (solo i numeri iniziali) di un pacchetto installato, senza importarlo."""
+    try:
+        v = metadata.version(distribuzione)
+    except metadata.PackageNotFoundError:
+        return None
+    m = re.match(r"\d+(?:\.\d+)*", v)  # "2.5.4" -> (2, 5, 4); "2.4.0rc1" -> (2, 4, 0)
+    return tuple(int(n) for n in m.group().split(".")) if m else None
+
+
+def istruzioni_cpu(cpuinfo: str | None = None) -> set[str] | None:
+    """Estensioni del processore (avx, sse4_1...) lette da /proc/cpuinfo; None se non si possono sapere."""
+    if cpuinfo is None:
+        try:
+            cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+    for riga in cpuinfo.splitlines():
+        if riga.startswith("flags"):
+            return set(riga.partition(":")[2].split())
+    return None
+
+
 def ha_gpu_nvidia() -> bool:
     return Path("/proc/driver/nvidia").exists() or shutil.which("nvidia-smi") is not None
 
@@ -101,6 +126,33 @@ def manca_programma(nome: str, gestore: str | None = None) -> str:
         pacchetto = _PACCHETTI.get((gestore, nome), nome)
         return f"Manca {nome}: {_INSTALLA[gestore].format(pacchetto)}"
     return f"Manca {nome}: installalo con il gestore di pacchetti del sistema."
+
+
+_NOMI_ISTRUZIONI = {"sse4_1": "SSE4.1", "sse4_2": "SSE4.2"}
+
+
+def manca_cpu(requisiti: dict[str, set[str]], istruzioni: set[str] | None = None,
+              suggerimento: str | None = None) -> str | None:
+    """Messaggio se il processore non ha le istruzioni che le librerie precompilate richiedono.
+
+    `requisiti`: libreria -> estensioni necessarie (nomi come in /proc/cpuinfo). Senza questo
+    controllo il programma muore con "Illegal instruction" appena carica la libreria.
+    `suggerimento`, se c'è, prende il posto del consiglio generico di cambiare processore.
+    """
+    istruzioni = istruzioni_cpu() if istruzioni is None else istruzioni
+    if istruzioni is None or os.environ.get("CASOWEB_IGNORA_CPU"):
+        return None
+    mancano = {lib: sorted(req - istruzioni) for lib, req in requisiti.items() if req - istruzioni}
+    if not mancano:
+        return None
+    righe = ["Il processore di questo PC non ha le istruzioni richieste dalle librerie precompilate:"]
+    for lib, m in mancano.items():
+        righe.append(f"  - {lib}: {', '.join(_NOMI_ISTRUZIONI.get(i, i.upper()) for i in m)}")
+    righe.append("Il comando si interromperebbe con \"Illegal instruction\".")
+    righe.append(suggerimento or "Serve un processore più recente (con AVX: all'incirca dal 2011 in poi),\n"
+                                 "oppure librerie compilate apposta per questo.")
+    righe += ["Se il controllo sbaglia, CASOWEB_IGNORA_CPU=1 lo salta.", f"Dettagli: {README}"]
+    return "\n".join(righe)
 
 
 def manca_extra(extra: Extra, mancanti: list[str], *, tipo: str | None = None, gpu: bool | None = None,

@@ -69,6 +69,24 @@ uv tool install --python 3.12 \
 Se qualcosa manca, `casoweb` se ne accorge e suggerisce il comando adatto a
 come è stato installato e alla presenza o meno della GPU.
 
+### Processori meno recenti
+
+Le librerie precompilate di `separa-parlato` richiedono istruzioni che i
+processori più vecchi non hanno: AVX per TensorFlow (la segmentazione),
+SSE4.1 per Whisper (CTranslate2), il livello x86-64-v2 per NumPy 2.4 e
+successivi. Su un PC più vecchio `casoweb` se ne accorge prima di partire e
+lo spiega, invece di interrompersi con "Illegal instruction". Senza AVX
+(processori all'incirca fino al 2011) si può comunque trascrivere,
+preparando la segmentazione su un altro PC: vedi
+[docs/separa-parlato.md](docs/separa-parlato.md#requisiti-del-processore).
+Per controllare il proprio processore:
+
+```bash
+grep -o -w -E 'ssse3|sse4_1|sse4_2|popcnt|avx2?' /proc/cpuinfo | sort -u
+```
+
+`video-da-audio` e gli altri comandi leggeri non hanno questi requisiti.
+
 ### Aggiornare e disinstallare
 
 ```bash
@@ -93,7 +111,10 @@ uv pip install --overrides scripts/overrides-cpu.txt -e '.[dev,separa-parlato,cp
 ```bash
 casoweb --help
 casoweb <comando> --help
+casoweb -v DEBUG <comando> ...   # mostra ogni passo: librerie caricate, programmi lanciati
 ```
+
+Con `-v WARNING` restano solo avvisi ed errori.
 
 ### Comandi disponibili
 

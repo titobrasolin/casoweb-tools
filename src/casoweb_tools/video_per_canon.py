@@ -26,6 +26,7 @@ casoweb_tools.cmds.video_per_canon).
 from __future__ import annotations
 
 import io
+import logging
 import re
 import shutil
 import struct
@@ -38,6 +39,8 @@ from PIL import Image
 
 from casoweb_tools.ambiente import manca_programma
 from casoweb_tools.canon_avi import AUDIO_RATE, build, campioni_audio, idit_string, parse_canon
+
+logger = logging.getLogger(__name__)
 
 # nome: (larghezza, altezza, fps, qualità JPEG di partenza, dimensione massima di un fotogramma in byte)
 # Modalità e limiti: guida dell'utente Canon della A2000 IS (CDI-E388-010), pp. 90-91.
@@ -217,6 +220,7 @@ def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", *salto, "-i", str(ingresso), *durata, "-an", "-vf", vf,
            *limite, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     dim = w * h * 3
+    logger.debug(f"Avvio: {' '.join(cmd)}")
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
         while len(raw := p.stdout.read(dim)) == dim:
             yield Image.frombytes("RGB", (w, h), raw)
@@ -227,8 +231,10 @@ def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None
 
 def _audio(ingresso: Path, durata: list[str]) -> bytes:
     """Audio u8 mono a AUDIO_RATE Hz; vuoto se il video non ha audio."""
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(ingresso), *durata, "-vn",
-                        "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", "-"], capture_output=True)
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(ingresso), *durata, "-vn",
+           "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", "-"]
+    logger.debug(f"Avvio: {' '.join(cmd)}")
+    r = subprocess.run(cmd, capture_output=True)
     if r.returncode and b"does not contain any stream" in r.stderr:
         return b""
     if r.returncode:
@@ -255,7 +261,7 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
     if o.max_fotogramma is not None:
         cap = o.max_fotogramma or None
     if o.profilo not in VERIFICATI:
-        print(f"Attenzione: il profilo {o.profilo} non è ancora stato verificato su un file Canon reale.")
+        logger.warning(f"Il profilo {o.profilo} non è ancora stato verificato su un file Canon reale.")
     durata = ["-t", str(o.durata)] if o.durata else []
     quando = time.localtime()
 
@@ -269,7 +275,7 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
             break
         q -= 2
     n = len(frames)
-    print(f"Qualità {q}: fotogramma medio {sum(len(f) for f in frames) // n} byte, massimo {massimo} byte")
+    logger.info(f"Qualità {q}: fotogramma medio {sum(len(f) for f in frames) // n} byte, massimo {massimo} byte")
 
     voluti = campioni_audio(n, fps)
     audio = (_audio(ingresso, durata) + b"\x80" * voluti)[:voluti]  # taglia o completa con silenzio (0x80)
@@ -281,13 +287,13 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
                          fps, (w, h), MODALITA_THM[o.profilo])
 
     for avviso in avvisi_limiti(o.profilo, n / fps, len(avi)):
-        print(f"Attenzione: {avviso}")
+        logger.warning(avviso)
     nome = f"MVI_{o.numero:04d}"
     o.cartella.mkdir(parents=True, exist_ok=True)
     out_avi, out_thm = o.cartella / f"{nome}.AVI", o.cartella / f"{nome}.THM"
     out_avi.write_bytes(avi)
     out_thm.write_bytes(thm)
-    print(f"Creati {nome}.AVI ({len(avi) // 1024} KiB, {n} fotogrammi, {n / fps:.1f} s) e {nome}.THM in {o.cartella}")
+    logger.info(f"Creati {nome}.AVI ({len(avi) // 1024} KiB, {n} fotogrammi, {n / fps:.1f} s) e {nome}.THM in {o.cartella}")
     return out_avi, out_thm
 
 
@@ -315,6 +321,6 @@ def verifica(percorso: Path) -> bool:
     except ValueError as exc:
         raise SystemExit(f"{percorso}: {exc}") from exc
     identico = build(frames, audio, w, h, fps, idit) == d
-    print(f"{percorso.name}: {'identico byte per byte' if identico else 'DIVERSO'} "
-          f"({len(frames)} fotogrammi, {w}x{h}, {fps} fps)")
+    logger.info(f"{percorso.name}: {'identico byte per byte' if identico else 'DIVERSO'} "
+                f"({len(frames)} fotogrammi, {w}x{h}, {fps} fps)")
     return identico

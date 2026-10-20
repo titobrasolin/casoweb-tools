@@ -24,6 +24,7 @@ si possono riusare con --load-params.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -32,6 +33,8 @@ import time
 from pathlib import Path
 
 from casoweb_tools.ambiente import manca_programma
+
+logger = logging.getLogger(__name__)
 
 # nome -> parametri del profilo
 #   w, h          dimensioni del video
@@ -155,7 +158,9 @@ def build_command(*, audio: Path, image: Path | None, profile: dict, out_file: P
                   total: float) -> list[str]:
     w, h = profile["w"], profile["h"]
     fps = args["fps"] or profile["fps"]
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats"]
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    if logger.isEnabledFor(logging.INFO):
+        cmd.append("-stats")  # avanzamento di ffmpeg, come le altre righe informative
     if image:
         cmd += ["-loop", "1", "-framerate", str(fps), "-i", str(image)]
     else:
@@ -209,7 +214,7 @@ def run(audio: Path, cli: dict, *, load_params: str | None = None, anteprima: bo
         try:
             loaded = json.loads(Path(load_params).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as e:
-            print(f"Attenzione: impossibile leggere {load_params} ({e}); ignorato.", file=sys.stderr)
+            logger.warning(f"Impossibile leggere {load_params} ({e}); ignorato.")
 
     # precedenza: flag esplicito > file --load-params > default
     cfg = {k: (cli.get(k) if cli.get(k) is not None else loaded.get(k, d)) for k, d in BUILTIN_DEFAULTS.items()}
@@ -249,32 +254,33 @@ def run(audio: Path, cli: dict, *, load_params: str | None = None, anteprima: bo
     # SRT di lavoro con nome semplice (evita problemi di escaping nel filtro) e tempi spostati del respiro
     work_srt = out_dir / "_sub.srt"
     n = shift_srt(srt, work_srt, pad)
-    print(f"Audio: {duration / 60:.1f} min  |  sottotitoli: {n}  |  sfondo: {image.name if image else 'nero'}")
-    print(f"Profili: {', '.join(names)}  |  sottotitoli {'attivabili' if cfg['soft'] else 'incorporati'}\n")
+    logger.info(f"Audio: {duration / 60:.1f} min  |  sottotitoli: {n}  |  sfondo: {image.name if image else 'nero'}")
+    logger.info(f"Profili: {', '.join(names)}  |  sottotitoli {'attivabili' if cfg['soft'] else 'incorporati'}\n")
 
     generated = []
     try:
         for name in names:
             p = PROFILES[name]
             out_file = out_dir / f"{base}_{name}.mp4"
-            print(f"[{name}] {p['w']}x{p['h']} -> {out_file.name}")
+            logger.info(f"[{name}] {p['w']}x{p['h']} -> {out_file.name}")
             cmd = build_command(audio=audio, image=image, profile=p, out_file=out_file, args=cfg, total=total)
             t0 = time.time()
+            logger.debug(f"Avvio: {' '.join(cmd)}")
             subprocess.run(cmd, check=True, cwd=out_dir)
             size = out_file.stat().st_size / 1_000_000
-            print(f"\n   fatto in {time.time() - t0:.0f} s, {size:.1f} MB")
+            logger.info(f"\n   fatto in {time.time() - t0:.0f} s, {size:.1f} MB")
             if name.startswith("whatsapp") and size > 16:
-                print("   Attenzione: supera i 16 MB; per l'invio come video potrebbe essere troppo grande.")
+                logger.warning("supera i 16 MB; per l'invio come video potrebbe essere troppo grande.")
             generated.append(out_file)
     except subprocess.CalledProcessError as e:
         sys.exit(f"\nffmpeg ha fallito (codice {e.returncode}).")
     finally:
         work_srt.unlink(missing_ok=True)
 
-    print("\nFile generati:")
+    logger.info("\nFile generati:")
     for g in generated:
-        print(f"  - {g}")
-    print(f"\nParametri salvati in: {params_path}\n"
+        logger.info(f"  - {g}")
+    logger.info(f"\nParametri salvati in: {params_path}\n"
           f"Per ripetere modificando qualcosa: casoweb video-da-audio {audio_arg} --load-params {params_path}")
 
     if anteprima and generated:
@@ -282,5 +288,5 @@ def run(audio: Path, cli: dict, *, load_params: str | None = None, anteprima: bo
         if player:
             subprocess.run([player, str(generated[0])])
         else:
-            print(manca_programma("mpv") + " (serve per l'anteprima)")
+            logger.warning(manca_programma("mpv") + " (serve per l'anteprima)")
 

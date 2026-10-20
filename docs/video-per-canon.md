@@ -200,6 +200,8 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
   clip Compact esaminato (vedi sopra). Stampa poi dimensione media e
   massima.
 - `--durata` taglia il video ai primi N secondi.
+- `casoweb -v DEBUG video-per-canon ...` mostra anche i comandi ffmpeg
+  lanciati; `-v WARNING` lascia solo gli avvisi.
 - La miniatura del THM è presa a un terzo del video, non dal primo
   fotogramma, che è spesso nero per una dissolvenza o un titolo.
 - Un video senza audio riceve una traccia di silenzio.

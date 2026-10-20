@@ -70,6 +70,55 @@ Il modello si può scaricare in anticipo:
 HF_HUB_DISABLE_XET=1 uvx --from huggingface_hub hf download mobiuslabsgmbh/faster-whisper-large-v3-turbo
 ```
 
+### Requisiti del processore
+
+| Libreria | Istruzioni richieste | Fonte |
+|---|---|---|
+| TensorFlow (per inaSpeechSegmenter) | AVX | documentazione TensorFlow, dalla 1.6 |
+| CTranslate2 (per faster-whisper) | almeno SSE4.1 | [Hardware support](https://opennmt.net/CTranslate2/hardware_support.html) |
+| NumPy 2.4 e successivi | livello x86-64-v2: SSSE3, SSE4.1, SSE4.2, POPCNT | note di rilascio di NumPy 2.4 |
+
+Il comando legge `/proc/cpuinfo` prima di caricare le librerie e controlla
+solo ciò che serve ai passi da fare: TensorFlow si carica soltanto per
+segmentare, CTranslate2 soltanto per trascrivere. Se manca qualcosa lo dice
+ed esce, invece di morire con "Illegal instruction". Se il controllo
+sbagliasse, `CASOWEB_IGNORA_CPU=1` lo salta.
+
+**Processori senza AVX** (all'incirca fino al 2010-2011, come un Intel
+Core i3 M 370): manca solo TensorFlow, quindi la segmentazione. Tutto il
+resto, trascrizione compresa, funziona. La strada è fare la segmentazione
+altrove e copiare il TSV:
+
+```bash
+# su un PC più recente
+casoweb separa-parlato registrazione.webm --solo-segmenti
+# copiare registrazione_output/registrazione_segmenti.tsv nella stessa
+# posizione sul PC senza AVX, poi lì:
+casoweb separa-parlato registrazione.webm
+```
+
+Il TSV si può anche scrivere a mano: è un file di testo con inizio, fine
+(in secondi) ed etichetta (`parlato` o `musica`) per riga.
+
+Il portatile dell'articolo (i5-5200U, 2015) ha AVX2 e non ha problemi.
+
+Non è documentato se onnxruntime, che faster-whisper usa per il filtro del
+silenzio, richieda AVX: su un processore senza AVX `-v DEBUG` mostra se la
+trascrizione si ferma lì.
+
+### Quando qualcosa va storto
+
+```bash
+casoweb -v DEBUG separa-parlato registrazione.webm
+```
+
+In DEBUG il comando annuncia ogni passo prima di eseguirlo: istruzioni del
+processore, librerie caricate (NumPy, TensorFlow, CTranslate2) con le
+versioni, comandi ffmpeg lanciati, scelta di GPU o CPU. Se il programma si
+blocca o va in crash, l'ultima riga indica dove. In caso di crash di una
+libreria compilata, inoltre, Python stampa sempre il punto in cui si
+trovava (`Fatal Python error: ...` seguito dal traceback).
+
 ## `casoweb video-da-audio`
 
 ```bash
