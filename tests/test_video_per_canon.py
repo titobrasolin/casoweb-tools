@@ -177,6 +177,25 @@ def test_conversione_completa(tmp_path):
     assert res.exit_code == 0 and "identico byte per byte" in res.output
 
 
+@needs_ffmpeg
+def test_miniatura_a_un_terzo_del_video(tmp_path):
+    from PIL import Image, ImageStat
+
+    # 3 s di bianco che parte da nero con una dissolvenza di 0,4 s: il primo fotogramma è nero.
+    # Il video non ha audio: l'AVI riceve silenzio
+    video = tmp_path / "dissolvenza.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=white:s=320x240:r=25:d=3,fade=in:0:10",
+                    "-pix_fmt", "yuv420p", str(video)], check=True)
+    modello = tmp_path / "MVI_1259.THM"
+    modello.write_bytes(thm(_jpeg(tmp_path)))
+    res = CliRunner().invoke(main, ["video-per-canon", str(video), "--numero", "1267",
+                                    "--thm-modello", str(modello), "--cartella", str(tmp_path)])
+    assert res.exit_code == 0, res.output
+    assert set(ca.parse_canon((tmp_path / "MVI_1267.AVI").read_bytes())[1]) == {0x80}
+    miniatura = Image.open(io.BytesIO((tmp_path / "MVI_1267.THM").read_bytes())).convert("L")
+    assert ImageStat.Stat(miniatura).mean[0] > 200
+
+
 def test_cli_senza_argomenti():
     res = CliRunner().invoke(main, ["video-per-canon"])
     assert res.exit_code == 2

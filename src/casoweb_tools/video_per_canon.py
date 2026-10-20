@@ -119,13 +119,6 @@ def jpeg_422(im: Image.Image, qualita: int) -> bytes:
     return b.getvalue()
 
 
-def ffmpeg(*args: str) -> subprocess.CompletedProcess:
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], capture_output=True)
-    if r.returncode:
-        raise SystemExit("ffmpeg ha fallito:\n" + r.stderr.decode(errors="replace"))
-    return r
-
-
 # --------------------------------------------------------------------------
 # THM
 # --------------------------------------------------------------------------
@@ -196,14 +189,16 @@ def thm_da_modello(modello: bytes, jpeg160: bytes, quando: time.struct_time, num
 # --------------------------------------------------------------------------
 # Conversione
 # --------------------------------------------------------------------------
-def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None = None, quante: int | None = None):
-    """Fotogrammi RGB decodificati da ffmpeg, ridimensionati a w x h con bande nere, uno alla volta."""
+def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None = None, quante: int | None = None,
+              inizio: float = 0):
+    """Fotogrammi RGB decodificati da ffmpeg (da `inizio` secondi), ridimensionati a w x h con bande nere."""
     vf = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1"
     if fps:
         vf += f",fps={fps}"
+    salto = ["-ss", f"{inizio:.3f}"] if inizio else []
     limite = ["-frames:v", str(quante)] if quante else []
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(ingresso), *durata, "-an", "-vf", vf, *limite,
-           "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", *salto, "-i", str(ingresso), *durata, "-an", "-vf", vf,
+           *limite, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     dim = w * h * 3
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
         while len(raw := p.stdout.read(dim)) == dim:
@@ -211,6 +206,17 @@ def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None
         errore = p.stderr.read()
     if p.returncode:
         raise SystemExit("ffmpeg ha fallito:\n" + errore.decode(errors="replace"))
+
+
+def _audio(ingresso: Path, durata: list[str]) -> bytes:
+    """Audio u8 mono a AUDIO_RATE Hz; vuoto se il video non ha audio."""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(ingresso), *durata, "-vn",
+                        "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", "-"], capture_output=True)
+    if r.returncode and b"does not contain any stream" in r.stderr:
+        return b""
+    if r.returncode:
+        raise SystemExit("ffmpeg ha fallito:\n" + r.stderr.decode(errors="replace"))
+    return r.stdout
 
 
 def _codifica(ingresso: Path, durata: list[str], w: int, h: int, fps: int, qualita: int) -> list[bytes]:
@@ -249,11 +255,11 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
     print(f"Qualità {q}: fotogramma medio {sum(len(f) for f in frames) // n} byte, massimo {massimo} byte")
 
     voluti = campioni_audio(n, fps)
-    audio = ffmpeg("-i", str(ingresso), *durata, "-vn", "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", "-").stdout
-    audio = (audio + b"\x80" * voluti)[:voluti]  # taglia o completa con silenzio (0x80)
+    audio = (_audio(ingresso, durata) + b"\x80" * voluti)[:voluti]  # taglia o completa con silenzio (0x80)
     avi = build(frames, audio, w, h, fps, idit_string(time.mktime(quando)))
 
-    miniatura = jpeg_422(next(_immagini(ingresso, durata, 160, 120, quante=1)), 90)
+    # miniatura a un terzo del video: il primo fotogramma è spesso nero (dissolvenze, titoli)
+    miniatura = jpeg_422(next(_immagini(ingresso, durata, 160, 120, quante=1, inizio=n / fps / 3)), 90)
     thm = thm_da_modello(modello, miniatura, quando, o.cartella_fotocamera * 10000 + o.numero, n,
                          fps, (w, h), CODICE_MODALITA[o.profilo])
 

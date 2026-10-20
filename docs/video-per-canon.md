@@ -166,8 +166,9 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
   resta sotto i 5000 byte (`--max-fotogramma`): un limite prudenziale, un
   po' sotto i 5,6 KB del clip Compact esaminato (vedi sotto). Stampa poi
   dimensione media e massima.
-- La miniatura del THM è il primo fotogramma del video: se il video inizia
-  con una dissolvenza, in galleria compare quasi nera.
+- La miniatura del THM è presa a un terzo del video, non dal primo
+  fotogramma, che è spesso nero per una dissolvenza o un titolo.
+- Un video senza audio riceve una traccia di silenzio.
 - Servono ffmpeg, per decodificare il video, e Pillow, per codificare i
   JPEG (si installa con il pacchetto).
 - Avvisa quando il video supera la durata massima che la fotocamera
