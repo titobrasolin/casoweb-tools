@@ -34,8 +34,8 @@ Copiare sempre AVI e THM insieme.""",
               help="Numero della cartella sulla scheda (101 per 101CANON), scritto nel THM.")
 @click.option("--profilo", type=click.Choice(list(core.PROFILI)), default="compatto", show_default=True,
               help="compatto = 160x120 a 15 fps; 320x240 e 640x480 a 30 fps.")
-@click.option("--qualita", type=click.IntRange(1, 31),
-              help="Valore -q:v di ffmpeg di partenza (basso = migliore) [default: del profilo].")
+@click.option("--qualita", type=click.IntRange(1, 95),
+              help="Qualità JPEG di partenza, da 1 a 95 (alto = migliore) [default: del profilo].")
 @click.option("--max-fotogramma", type=click.IntRange(min=0),
               help="Dimensione massima di un fotogramma in byte, 0 = nessun limite [default: del profilo].")
 @click.option("--durata", type=float, help="Taglia a N secondi.")

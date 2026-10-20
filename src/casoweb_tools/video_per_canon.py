@@ -4,8 +4,10 @@ sul display di una Canon PowerShot (provato sulla A2000 IS).
 
 La fotocamera mostra un video copiato sulla scheda solo se:
   - l'AVI è costruito come i suoi (vedi casoweb_tools.canon_avi);
-  - i fotogrammi JPEG sono "alla Canon": marcatore AVI1 al posto di JFIF,
-    un DRI, nessuna tabella Huffman (si usano quelle standard);
+  - i fotogrammi JPEG sono "alla Canon": 4:2:2 a blocchi 16x8, marcatore
+    AVI1 al posto di JFIF, un DRI, nessuna tabella Huffman (si usano quelle
+    standard). ffmpeg codifica il 4:2:2 a blocchi 16x16, che la fotocamera
+    mostra a strisce: perciò ffmpeg decodifica e Pillow codifica;
   - accanto c'è un .THM con lo stesso numero: JPEG 160x120 con un blocco
     Exif Canon che contiene anche numero di fotogrammi e fps, da cui la
     fotocamera ricava la durata. Se THM e AVI non concordano, il video
@@ -23,30 +25,33 @@ casoweb_tools.cmds.video_per_canon).
 
 from __future__ import annotations
 
+import io
 import re
 import shutil
 import struct
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from PIL import Image
+
 from casoweb_tools.ambiente import manca_programma
 from casoweb_tools.canon_avi import AUDIO_RATE, build, campioni_audio, idit_string, parse_canon
 
-# nome: (larghezza, altezza, fps, qualità -q:v di partenza, dimensione massima di un fotogramma in byte)
+# nome: (larghezza, altezza, fps, qualità JPEG di partenza, dimensione massima di un fotogramma in byte)
 # Modalità e limiti: guida dell'utente Canon della A2000 IS (CDI-E388-010), pp. 90-91.
+# Qualità 92: tabelle di quantizzazione vicine a quelle Canon (2, 2, 2, 3 ... in Standard).
 PROFILI = {
     # Compact. Struttura verificata byte per byte su un file Canon e provata sulla
-    # fotocamera; fotogrammi Canon da 1,7 a 5,3 KB
-    "compatto": (160, 120, 15, 3, 5000),
+    # fotocamera; fotogrammi Canon da 1,7 a 5,6 KB
+    "compatto": (160, 120, 15, 92, 5000),
     # Standard 320x240. Struttura verificata byte per byte su un file Canon (fotogrammi
     # da 11 a 22 KB); conversione non ancora provata sulla fotocamera
-    "320x240": (320, 240, 30, 3, None),
+    "320x240": (320, 240, 30, 92, None),
     # Standard 640x480. Struttura verificata byte per byte su file Canon (fotogrammi fino a
-    # 68 KB); conversione non ancora provata sulla fotocamera
-    "640x480": (640, 480, 30, 3, None),
+    # 68 KB); conversione provata sulla fotocamera
+    "640x480": (640, 480, 30, 92, None),
 }
 VERIFICATI = {"compatto", "320x240", "640x480"}
 # codice della modalità nel THM (tabella 0x0011, valore 8), osservato su clip della fotocamera
@@ -87,13 +92,31 @@ def segmenti(jpeg: bytes) -> tuple[list[tuple[int, bytes]], int]:
     raise ValueError("SOS non trovato")
 
 
+def unisci(segs: list[tuple[int, bytes]], marcatore: int) -> bytes:
+    """I segmenti `marcatore` riuniti in uno solo, come nei JPEG Canon (es. un DQT con entrambe le tabelle)."""
+    dati = b"".join(s[4:] for m, s in segs if m == marcatore)
+    return bytes([0xFF, marcatore]) + struct.pack(">H", len(dati) + 2) + dati if dati else b""
+
+
 def a_stile_canon(jpeg: bytes) -> bytes:
-    """JFIF -> AVI1, aggiunge DRI, toglie le tabelle Huffman (la Canon usa quelle standard)."""
+    """JFIF -> AVI1, aggiunge DRI, un solo DQT, toglie le tabelle Huffman (la Canon usa quelle standard).
+
+    Come nei file Canon la lunghezza è sempre pari: se serve, uno 0 dopo la fine dell'immagine.
+    """
     segs, sos = segmenti(jpeg)
     avi1 = b"\xff\xe0\x00\x10AVI1" + b"\0" * 10
     dri = b"\xff\xdd\x00\x04\x00\x00"
-    resto = b"".join(s for m, s in segs if m not in (0xE0, 0xC4, 0xFE, 0xDD))
-    return b"\xff\xd8" + avi1 + dri + resto + jpeg[sos:]
+    resto = b"".join(s for m, s in segs if m not in (0xE0, 0xC4, 0xFE, 0xDD, 0xDB))
+    out = b"\xff\xd8" + avi1 + dri + unisci(segs, 0xDB) + resto + jpeg[sos:]
+    return out + b"\0" * (len(out) & 1)
+
+
+def jpeg_422(im: Image.Image, qualita: int) -> bytes:
+    """JPEG 4:2:2 come quelli Canon: luma 2x1 e croma 1x1 (blocchi 16x8), tabelle di quantizzazione
+    distinte per luma e croma, tabelle Huffman standard (optimize=False)."""
+    b = io.BytesIO()
+    im.save(b, "JPEG", quality=qualita, subsampling="4:2:2", optimize=False)
+    return b.getvalue()
 
 
 def ffmpeg(*args: str) -> subprocess.CompletedProcess:
@@ -165,20 +188,33 @@ def thm_da_modello(modello: bytes, jpeg160: bytes, quando: time.struct_time, num
     ln = struct.unpack(">H", modello[4:6])[0]
     app1 = patch_exif(modello[2:4 + ln], quando, numero_file, fotogrammi, fps, dimensioni, codice_modalita)
     segs, sos = segmenti(jpeg160)
-    resto = b"".join(s for m, s in segs if m not in (0xE0, 0xFE))
-    return b"\xff\xd8" + app1 + resto + jpeg160[sos:]
+    # come nei THM Canon: un DQT, il SOF, un DHT con tutte le tabelle
+    resto = b"".join(s for m, s in segs if m not in (0xE0, 0xFE, 0xDB, 0xC4))
+    return b"\xff\xd8" + app1 + unisci(segs, 0xDB) + resto + unisci(segs, 0xC4) + jpeg160[sos:]
 
 
 # --------------------------------------------------------------------------
 # Conversione
 # --------------------------------------------------------------------------
-def _codifica(ingresso: Path, durata: list[str], w: int, h: int, fps: int, q: int, tmp: Path) -> list[Path]:
-    vf = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps},setsar=1"
-    for f in tmp.glob("f_*.jpg"):
-        f.unlink()
-    ffmpeg("-i", str(ingresso), *durata, "-an", "-vf", vf, "-c:v", "mjpeg", "-q:v", str(q), "-pix_fmt", "yuvj422p",
-           "-huffman", "default", "-flags", "+bitexact", str(tmp / "f_%06d.jpg"))
-    return sorted(tmp.glob("f_*.jpg"))
+def _immagini(ingresso: Path, durata: list[str], w: int, h: int, fps: int | None = None, quante: int | None = None):
+    """Fotogrammi RGB decodificati da ffmpeg, ridimensionati a w x h con bande nere, uno alla volta."""
+    vf = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+    if fps:
+        vf += f",fps={fps}"
+    limite = ["-frames:v", str(quante)] if quante else []
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(ingresso), *durata, "-an", "-vf", vf, *limite,
+           "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    dim = w * h * 3
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
+        while len(raw := p.stdout.read(dim)) == dim:
+            yield Image.frombytes("RGB", (w, h), raw)
+        errore = p.stderr.read()
+    if p.returncode:
+        raise SystemExit("ffmpeg ha fallito:\n" + errore.decode(errors="replace"))
+
+
+def _codifica(ingresso: Path, durata: list[str], w: int, h: int, fps: int, qualita: int) -> list[bytes]:
+    return [a_stile_canon(jpeg_422(im, qualita)) for im in _immagini(ingresso, durata, w, h, fps)]
 
 
 def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
@@ -200,35 +236,26 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
     durata = ["-t", str(o.durata)] if o.durata else []
     quando = time.localtime()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-        # alza la compressione finché il fotogramma più pesante non sta nel limite
-        while True:
-            files = _codifica(ingresso, durata, w, h, fps, q, tmp)
-            if not files:
-                raise SystemExit("ffmpeg non ha prodotto nessun fotogramma.")
-            massimo = max(f.stat().st_size for f in files)
-            if not cap or massimo <= cap + 40 or q >= 31:  # +40: le intestazioni vengono sostituite
-                break
-            q += 1
-        medio = sum(f.stat().st_size for f in files) // len(files)
-        print(f"Qualità -q:v {q}: fotogramma medio {medio} byte, massimo {massimo} byte (Canon: ~4000 / 5272)")
-        frames = [a_stile_canon(f.read_bytes()) for f in files]
-        n = len(frames)
+    # abbassa la qualità finché il fotogramma più pesante non sta nel limite
+    while True:
+        frames = _codifica(ingresso, durata, w, h, fps, q)
+        if not frames:
+            raise SystemExit("ffmpeg non ha prodotto nessun fotogramma.")
+        massimo = max(len(f) for f in frames)
+        if not cap or massimo <= cap or q <= 10:
+            break
+        q -= 2
+    n = len(frames)
+    print(f"Qualità {q}: fotogramma medio {sum(len(f) for f in frames) // n} byte, massimo {massimo} byte")
 
-        voluti = campioni_audio(n, fps)
-        raw = tmp / "a.raw"
-        ffmpeg("-i", str(ingresso), *durata, "-vn", "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", str(raw))
-        audio = raw.read_bytes() if raw.stat().st_size else b""
-        audio = (audio + b"\x80" * voluti)[:voluti]  # taglia o completa con silenzio (0x80)
-        avi = build(frames, audio, w, h, fps, idit_string(time.mktime(quando)))
+    voluti = campioni_audio(n, fps)
+    audio = ffmpeg("-i", str(ingresso), *durata, "-vn", "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", "-").stdout
+    audio = (audio + b"\x80" * voluti)[:voluti]  # taglia o completa con silenzio (0x80)
+    avi = build(frames, audio, w, h, fps, idit_string(time.mktime(quando)))
 
-        ffmpeg("-i", str(ingresso), *durata, "-an",
-               "-vf", "scale=160:120:force_original_aspect_ratio=decrease,pad=160:120:(ow-iw)/2:(oh-ih)/2,setsar=1",
-               "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "3", "-pix_fmt", "yuvj422p", "-huffman", "default",
-               "-flags", "+bitexact", str(tmp / "t.jpg"))
-        thm = thm_da_modello(modello, (tmp / "t.jpg").read_bytes(), quando, o.cartella_fotocamera * 10000 + o.numero, n,
-                             fps, (w, h), CODICE_MODALITA[o.profilo])
+    miniatura = jpeg_422(next(_immagini(ingresso, durata, 160, 120, quante=1)), 90)
+    thm = thm_da_modello(modello, miniatura, quando, o.cartella_fotocamera * 10000 + o.numero, n,
+                         fps, (w, h), CODICE_MODALITA[o.profilo])
 
     for avviso in avvisi_limiti(o.profilo, n / fps, len(avi)):
         print(f"Attenzione: {avviso}")

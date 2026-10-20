@@ -73,8 +73,8 @@ modalità. Partendo dal THM Compact o da quello LP e portandoli a Standard
 640, la tabella `0x0011` coincide con quella del THM Standard 640, salvo il
 valore 11, che cresce da un clip all'altro come un contatore
 **[ispezione]**. Nella tabella `0x0026` restano diversi i valori 44 e 47,
-di significato ignoto. Che la fotocamera accetti un THM così ottenuto è
-ancora da provare.
+di significato ignoto. La fotocamera accetta un THM così ottenuto: un
+video 640x480 con il THM di un clip Compact si riproduce **[prova]**.
 
 Il messaggio "Immagine non identificata" è quello che la guida prevede per
 immagini "manipolate su un computer, rinominate o riprese con un'altra
@@ -101,8 +101,19 @@ andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
   30 fps danno 29397,33 campioni, e l'ultimo blocco porta il totale a 29398.
 
 Anche i fotogrammi sono diversi da quelli di ffmpeg **[ispezione]**:
-marcatore `AVI1` al posto di `JFIF`, un `DRI` e nessuna tabella Huffman (si
-usano quelle standard del JPEG).
+marcatore `AVI1` al posto di `JFIF`, un `DRI`, le due tabelle di
+quantizzazione (luma e croma) in un solo segmento `DQT`, nessuna tabella
+Huffman (si usano quelle standard del JPEG) e lunghezza sempre pari, con uno
+`00` dopo la fine dell'immagine quando serve.
+
+Soprattutto, il 4:2:2 Canon ha la luma campionata 2x1 e la croma 1x1
+(blocchi di 16x8 pixel), mentre ffmpeg scrive il 4:2:2 come luma 2x2 e
+croma 1x2 (blocchi di 16x16): un JPEG valido, che però la fotocamera a
+640x480 mostra a strisce verdi orizzontali, pur riproducendo il video per
+intero con l'audio giusto **[prova]**. Nessuna opzione di ffmpeg cambia il
+campionamento, perciò `video-per-canon` usa ffmpeg solo per decodificare e
+ridimensionare, e codifica i fotogrammi con Pillow, che produce lo stesso
+campionamento della Canon. Anche le miniature dei THM Canon sono così.
 
 `casoweb_tools.canon_avi` riproduce questa struttura: rigenerando un AVI
 della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un file
@@ -145,8 +156,9 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | THM con numero del file non aggiornato | si riproduce **[prova]** |
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
 | Struttura AVI dei profili `320x240` e `640x480` | rigenerata identica da file Canon **[ispezione]** |
-| Video convertito, profili `320x240` e `640x480` | da provare sulla fotocamera |
-| THM modello di un'altra modalità | da provare sulla fotocamera |
+| Video convertito a 640x480 con i JPEG di ffmpeg (16x16), THM da un clip Compact | si riproduce per intero con l'audio, ma a strisce verdi **[prova]** |
+| Video convertito a 640x480 con i JPEG di Pillow (16x8), THM da un clip Compact | si riproduce correttamente **[prova]** |
+| Video convertito, profilo `320x240` | da provare sulla fotocamera |
 | Modalità LP | AVI identico allo Standard con fotogrammi circa a metà (30 KB invece di 61 KB); il THM ha un indicatore LP **[ispezione]**. Nessun profilo per ora |
 | Clip più lunghi della durata massima | da provare |
 

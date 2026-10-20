@@ -1,3 +1,4 @@
+import io
 import shutil
 import struct
 import subprocess
@@ -93,7 +94,27 @@ def test_a_stile_canon(tmp_path):
     marcatori = [m for m, _ in segs]
     assert marcatori[:2] == [0xE0, 0xDD] and segs[0][1][4:8] == b"AVI1"
     assert 0xC4 not in marcatori  # niente tabelle Huffman
+    assert marcatori.count(0xDB) == 1 and len(out) % 2 == 0
     subprocess.run(["ffmpeg", "-v", "error", "-f", "mjpeg", "-i", "-", "-f", "null", "-"], input=out, check=True)
+
+
+@needs_ffmpeg
+def test_jpeg_422_come_canon(tmp_path):
+    from PIL import Image
+
+    im = Image.open(io.BytesIO(_jpeg(tmp_path, 640, 480))).convert("RGB")
+    jpeg = vc.jpeg_422(im, 92)
+    out = vc.a_stile_canon(jpeg)
+    sof = dict(vc.segmenti(out)[0])[0xC0]
+    # componenti (id, campionamento, tabella di quantizzazione): luma 2x1, croma 1x1, come nei file Canon
+    assert sof[10:19] == bytes([1, 0x21, 0, 2, 0x11, 1, 3, 0x11, 1])
+
+    def decodifica(j):
+        return subprocess.run(["ffmpeg", "-v", "error", "-f", "mjpeg", "-i", "-", "-f", "rawvideo", "-"],
+                              input=j, capture_output=True, check=True).stdout
+
+    # senza DHT si decodifica uguale: Pillow usa le tabelle Huffman standard
+    assert decodifica(out) == decodifica(jpeg)
 
 
 @needs_ffmpeg
@@ -147,7 +168,7 @@ def test_conversione_completa(tmp_path):
     avi = (sd / "MVI_1266.AVI").read_bytes()
     frames, audio, w, h, fps, _ = ca.parse_canon(avi)
     assert (w, h, fps, len(frames)) == (160, 120, 15, 30)
-    assert max(len(f) for f in frames) <= vc.PROFILI["compatto"][4] + 40
+    assert max(len(f) for f in frames) <= vc.PROFILI["compatto"][4]
     mn = leggi_makernote((sd / "MVI_1266.THM").read_bytes())
     assert mn["numero_file"] == 1011266 and mn["fotogrammi"] == (30, 30, 30)
     assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
