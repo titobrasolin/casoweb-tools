@@ -115,14 +115,15 @@ con quello Canon della stessa modalità **[ispezione]**, salvo:
   hanno lo stesso identificativo.
 
 La fotocamera accetta un THM così ottenuto: lo stesso video, convertito
-nei quattro profili con il THM di un clip Compact, si riproduce
-**[prova]**.
+nei quattro profili con il THM di un clip Compact, si riproduce e il
+display mostra "160/15", "320/30", "640/30" e "640lp/30" come per i clip
+Canon **[prova]**.
 
 Il codice aggiorna anche il valore 92 della tabella `0x000D`, ma solo se
 coincide con il numero di fotogrammi del modello, come in un THM esaminato
 in precedenza. Nei quattro THM di cui sopra non coincide (vale 98 o 103,
-senza relazione con i fotogrammi), quindi resta com'è, e il video 640x480
-appena citato si riproduce comunque **[prova]**.
+senza relazione con i fotogrammi), quindi resta com'è, e i video appena
+citati si riproducono comunque **[prova]**.
 
 Il messaggio "Immagine non identificata" è quello che la guida prevede per
 immagini "manipolate su un computer, rinominate o riprese con un'altra
@@ -138,8 +139,8 @@ andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
 
 - un'intestazione fissa di 2 KB: il blocco `LIST movi` inizia sempre a
   `0x800`, con un `JUNK` di riempimento;
-- l'audio a blocchi di esattamente un secondo (11024 byte), ciascuno
-  seguito da tanti fotogrammi quanti sono gli fps;
+- l'audio a blocchi di un secondo (11024 byte; l'ultimo può essere più
+  corto), ciascuno seguito da tanti fotogrammi quanti sono gli fps;
 - l'indice vero nei blocchi OpenDML `ix00`/`ix01` in fondo ai dati, mentre
   `idx1` ha solo due voci (il primo blocco audio e il primo fotogramma).
   ffmpeg fa il contrario;
@@ -188,14 +189,17 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
   dato di una fotocamera specifica.
 - `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
   THM.
+- `--profilo` sceglie la modalità: `compatto` (predefinito, 160x120 a 15
+  fps), `320x240`, `640x480` o `640x480-lp` (Standard a 30 fps).
 - I fotogrammi partono dalla qualità JPEG che la fotocamera tiene a regime
   in quella modalità (vedi sopra; si cambia con `--qualita`, da 1 a 95). La
   qualità resta fissa per tutto il video, senza il controllo del bitrate
-  della fotocamera. Nel profilo
-  `compatto` lo script abbassa la qualità finché il fotogramma più pesante
-  resta sotto i 5000 byte (`--max-fotogramma`): un limite prudenziale, un
-  po' sotto i 5,6 KB del clip Compact esaminato (vedi sotto). Stampa poi
-  dimensione media e massima.
+  della fotocamera. Nel profilo `compatto` lo script abbassa la qualità
+  finché il fotogramma più pesante resta sotto i 5000 byte
+  (`--max-fotogramma`): un limite prudenziale, un po' sotto i 5,6 KB del
+  clip Compact esaminato (vedi sopra). Stampa poi dimensione media e
+  massima.
+- `--durata` taglia il video ai primi N secondi.
 - La miniatura del THM è presa a un terzo del video, non dal primo
   fotogramma, che è spesso nero per una dissolvenza o un titolo.
 - Un video senza audio riceve una traccia di silenzio.
@@ -225,7 +229,7 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | Lo stesso video convertito con tutti e quattro i profili, JPEG di Pillow con le qualità predefinite (84 dopo il limite di 5000 byte in `compatto`, 90, 86, 72), THM da un clip Compact | si riproducono tutti, immagine e audio corretti **[prova]** |
 | Profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]** |
 | THM che aggiorna solo la tabella `0x0011`, modello Compact | il display mostra "160/30" a 320x240 e 640x480 **[prova]** |
-| THM che aggiorna anche la tabella `0x0001` | coincide con i THM Canon nei campi della modalità **[ispezione]**; display da riprovare |
+| THM che aggiorna anche la tabella `0x0001`, modello Compact | coincide con i THM Canon nei campi della modalità **[ispezione]**; il display mostra "160/15", "320/30", "640/30", "640lp/30" **[prova]** |
 | Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con
