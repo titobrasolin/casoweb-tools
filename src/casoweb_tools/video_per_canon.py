@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from casoweb_tools.ambiente import manca_programma
-from casoweb_tools.canon_avi import AUDIO_RATE, build, idit_string, parse_canon
+from casoweb_tools.canon_avi import AUDIO_RATE, build, campioni_audio, idit_string, parse_canon
 
 # nome: (larghezza, altezza, fps, qualità -q:v di partenza, dimensione massima di un fotogramma in byte)
 # Modalità e limiti: guida dell'utente Canon della A2000 IS (CDI-E388-010), pp. 90-91.
@@ -39,13 +39,14 @@ PROFILI = {
     # Compact. Struttura verificata byte per byte su un file Canon e provata sulla
     # fotocamera; fotogrammi Canon da 1,7 a 5,3 KB
     "compatto": (160, 120, 15, 3, 5000),
-    # Standard 320x240. Modalità documentata da Canon; struttura dedotta, nessun file esaminato
+    # Standard 320x240. Struttura verificata byte per byte su un file Canon (fotogrammi
+    # da 11 a 22 KB); conversione non ancora provata sulla fotocamera
     "320x240": (320, 240, 30, 3, None),
-    # Standard 640x480. Formato osservato con mediainfo su un file Canon (circa 62 KB per
-    # fotogramma); struttura dedotta, non verificata byte per byte
+    # Standard 640x480. Struttura verificata byte per byte su file Canon (fotogrammi fino a
+    # 68 KB); conversione non ancora provata sulla fotocamera
     "640x480": (640, 480, 30, 3, None),
 }
-VERIFICATI = {"compatto"}
+VERIFICATI = {"compatto", "320x240", "640x480"}
 # durata massima di un clip registrato dalla fotocamera (circa 3 minuti in Compact, 1 ora in
 # Standard) e dimensione massima del file in Standard (4 GB)
 DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600}
@@ -196,7 +197,7 @@ def converti(ingresso: Path, o: Opzioni) -> tuple[Path, Path]:
         frames = [a_stile_canon(f.read_bytes()) for f in files]
         n = len(frames)
 
-        voluti = (n * AUDIO_RATE) // fps
+        voluti = campioni_audio(n, fps)
         raw = tmp / "a.raw"
         ffmpeg("-i", str(ingresso), *durata, "-vn", "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "u8", str(raw))
         audio = raw.read_bytes() if raw.stat().st_size else b""

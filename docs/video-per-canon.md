@@ -18,8 +18,8 @@ Ogni affermazione qui sotto ha una fonte, indicata così:
 | Modalità | Risoluzione | fps | Durata massima di un clip | Stato in `video-per-canon` |
 |---|---|---|---|---|
 | Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
-| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura **[deduzione]** |
-| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, formato osservato **[ispezione]**, struttura **[deduzione]** |
+| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]** |
+| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]** |
 | Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**, nessun file esaminato |
 
 Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
@@ -76,18 +76,19 @@ andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
   `idx1` ha solo due voci (il primo blocco audio e il primo fotogramma).
   ffmpeg fa il contrario;
 - la durata del fotogramma troncata (66666 µs a 15 fps), la data nel blocco
-  `IDIT` e il programma "CanonMVI06".
+  `IDIT` e il programma "CanonMVI06";
+- l'audio lungo quanto il video, arrotondato per eccesso: 80 fotogrammi a
+  30 fps danno 29397,33 campioni, e l'ultimo blocco porta il totale a 29398.
 
 Anche i fotogrammi sono diversi da quelli di ffmpeg **[ispezione]**:
 marcatore `AVI1` al posto di `JFIF`, un `DRI` e nessuna tabella Huffman (si
 usano quelle standard del JPEG).
 
 `casoweb_tools.canon_avi` riproduce questa struttura: rigenerando un AVI
-Compact della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un
-file **identico byte per byte** **[ispezione]**. Che a 30 fps la struttura
-sia la stessa, con un secondo di audio e 30 fotogrammi per blocco, è
-**[deduzione]**, coerente con l'interleave di un secondo che `mediainfo`
-riporta per un file a 640x480 **[ispezione]**.
+della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un file
+**identico byte per byte**, in tutte e tre le modalità Compact, 320x240 e
+640x480 **[ispezione]**. A 30 fps ogni blocco ha un secondo di audio e 30
+fotogrammi.
 
 ## Uso
 
@@ -122,7 +123,8 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | Video qualsiasi convertito, profilo `compatto` | si riproduce **[prova]** |
 | THM con numero del file non aggiornato | si riproduce **[prova]** |
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
-| Profili `320x240` e `640x480` | da verificare |
+| Struttura AVI dei profili `320x240` e `640x480` | rigenerata identica da file Canon **[ispezione]** |
+| Video convertito, profili `320x240` e `640x480` | da provare sulla fotocamera |
 | Modalità LP | da esplorare: con un file Canon si capirà se basta comprimere di più o se cambia anche il THM |
 | Clip più lunghi della durata massima | da provare |
 

@@ -23,8 +23,8 @@ def _jpeg(tmp_path, w=160, h=120, extra=()):
 
 def _sintetico(n=31, fps=15):
     frames = [b"\xff\xd8" + bytes([i % 251]) * (100 + i) + b"\xff\xd9" for i in range(n)]
-    audio = bytes(range(256)) * ((n * ca.AUDIO_RATE) // fps // 256 + 1)
-    return frames, audio[:(n * ca.AUDIO_RATE) // fps]
+    audio = bytes(range(256)) * (ca.campioni_audio(n, fps) // 256 + 1)
+    return frames, audio[:ca.campioni_audio(n, fps)]
 
 
 # --------------------------------------------------------------------------
@@ -61,6 +61,15 @@ def test_build_rifiuta_audio_di_durata_diversa():
     frames, audio = _sintetico()
     with pytest.raises(AssertionError):
         ca.build(frames, audio[:-1], 160, 120, 15)
+
+
+@pytest.mark.parametrize("n, fps, attesi", [
+    # valori dei file Canon reali (A2000 IS): l'ultimo secondo è arrotondato per eccesso
+    (80, 30, 29398), (76, 30, 27928), (79, 30, 29030), (44, 15, 32338),
+    (30, 30, 11024),
+])
+def test_campioni_audio_per_eccesso(n, fps, attesi):
+    assert ca.campioni_audio(n, fps) == attesi
 
 
 def test_idit_giorno_su_due_caratteri():

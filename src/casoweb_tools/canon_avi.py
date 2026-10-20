@@ -12,10 +12,12 @@ esattamente come i loro: fotogrammi Motion JPEG e audio PCM 8 bit mono a
     dagli indx delle intestazioni (OpenDML); idx1 ha solo due voci, il
     primo blocco audio e il primo fotogramma;
   - durata del fotogramma troncata (66666 µs a 15 fps), data nel blocco
-    IDIT e programma "CanonMVI06" in INFO/ISFT.
+    IDIT e programma "CanonMVI06" in INFO/ISFT;
+  - audio lungo quanto il video, arrotondato per eccesso al campione.
 
-`build` è verificata rigenerando un file Canon reale (160x120, 15 fps)
-identico byte per byte; `parse_canon` fa il percorso inverso.
+`build` è verificata rigenerando file Canon reali (160x120 a 15 fps,
+320x240 e 640x480 a 30 fps) identici byte per byte; `parse_canon` fa il
+percorso inverso.
 """
 
 from __future__ import annotations
@@ -51,13 +53,21 @@ def idit_string(ts: float | None = None) -> str:
     return time.strftime("%a %b ", t) + f"{t.tm_mday:2d}" + time.strftime(" %H:%M:%S %Y", t)
 
 
+def campioni_audio(n: int, fps: int) -> int:
+    """Campioni audio di un video di n fotogrammi: la Canon arrotonda per eccesso.
+
+    Es. 80 fotogrammi a 30 fps: 80 * 11024 / 30 = 29397,33 -> 29398 (osservato su file reali).
+    """
+    return -(-n * AUDIO_RATE // fps)
+
+
 def build(frames: list[bytes], audio: bytes, width: int, height: int, fps: int, idit: str | None = None) -> bytes:
     """AVI Canon da fotogrammi JPEG (già in stile Canon) e audio u8 mono a AUDIO_RATE Hz.
 
-    L'audio deve durare esattamente quanto il video: (len(frames) * AUDIO_RATE) // fps campioni.
+    L'audio deve durare esattamente quanto il video: campioni_audio(len(frames), fps) campioni.
     """
     n = len(frames)
-    assert n > 0 and len(audio) == (n * AUDIO_RATE) // fps, (len(audio), (n * AUDIO_RATE) // fps)
+    assert n > 0 and len(audio) == campioni_audio(n, fps), (len(audio), campioni_audio(n, fps))
     usec = 1_000_000 // fps  # 66666 a 15 fps, 33333 a 30 fps (troncato)
     maxframe = max(len(f) for f in frames)
     maxbps = AUDIO_RATE + fps * maxframe
