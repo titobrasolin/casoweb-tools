@@ -27,7 +27,8 @@ def test_verbosita_non_valida():
     assert res.exit_code == 2
 
 
-@pytest.mark.skipif(not hasattr(signal, "SIGILL"), reason="serve un sistema POSIX")
+# su Windows signal.SIGILL esiste, ma os.kill non invia segnali: chiude il processo con codice 4
+@pytest.mark.skipif(sys.platform == "win32" or not hasattr(signal, "SIGILL"), reason="serve un sistema POSIX")
 def test_crash_mostra_dove_si_trovava():
     """Un "Illegal instruction" vero: faulthandler deve stampare il traceback Python."""
     codice = ("import os, signal\n"
