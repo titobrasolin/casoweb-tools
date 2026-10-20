@@ -1,0 +1,265 @@
+# Video sul display di una vecchia Canon PowerShot
+
+Note tecniche per `casoweb video-per-canon`, nato da un esperimento con una
+Canon PowerShot A2000 IS (2008, DIGIC III): far vedere sul display della
+fotocamera, nella sua galleria, foto e video copiati sulla scheda dal PC.
+
+Ogni affermazione qui sotto ha una fonte, indicata così:
+
+- **[prova]**: provato sulla fotocamera;
+- **[ispezione]**: ricavato analizzando file prodotti dalla fotocamera;
+- **[Canon]**: documentazione ufficiale (vedi [Fonti](#fonti));
+- **[DCF]**: standard DCF, cui Canon dichiara la fotocamera conforme, ma
+  non verificato sulla fotocamera;
+- **[deduzione]**: ragionamento non ancora verificato.
+
+## Cosa sa fare la fotocamera
+
+| Modalità | Risoluzione | fps | Durata massima di un clip | Stato in `video-per-canon` |
+|---|---|---|---|---|
+| Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
+| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
+| Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480-lp`: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]**, conversione provata **[prova]** |
+
+Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
+dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
+e audio WAVE mono a 8 bit **[Canon]**; la frequenza, che Canon arrotonda a
+"11 kHz", è in realtà **11024 Hz** **[ispezione]**.
+
+La fotocamera regola la compressione durante la ripresa **[ispezione]**:
+ogni due fotogrammi può cambiare le tabelle di quantizzazione, che nei
+primi fotogrammi sono grossolane e poi si assestano. Le tabelle sono sue,
+non quelle standard del JPEG in scala. Per confrontarle con Pillow si
+cerca la qualità di Pillow con le tabelle più vicine (somma delle
+differenze di tutti i 128 valori). Nei clip esaminati (uno per modalità,
+circa 3 secondi ciascuno) **[ispezione]**:
+
+| Modalità | Fotogramma minimo / medio / massimo | Qualità Pillow equivalente: all'inizio, poi a regime |
+|---|---|---|
+| Compact 160x120 | 4,3 / 5,5 / 5,6 KB | 85, poi 90 |
+| Standard 320x240 | 11 / 21 / 22 KB | 75 e 85, poi 90 |
+| Standard 640x480 | 31 / 61 / 68 KB | 68 e 82, poi alterna 85 e 88 |
+| Standard LP 640x480 | 13 / 30 / 34 KB | 25, 45, poi alterna 68 e 75 |
+
+A 640x480 la qualità a regime alterna due valori, come se la fotocamera
+inseguisse un bitrate: circa 61 KB per fotogramma in Standard, circa 30 KB
+in LP **[deduzione]**. LP quindi usa la stessa struttura con una
+quantizzazione più grossa, che dimezza circa i fotogrammi. I profili di
+`video-per-canon` partono dalla qualità a regime: 90 per `compatto` e
+`320x240`, 86 per `640x480`, 72 per `640x480-lp`.
+
+## Come la fotocamera trova i file
+
+**Numeri e cartelle.** La fotocamera numera i file da 0001 a 9999 e li
+salva in cartelle di al massimo 2000 immagini **[Canon]** (guida, p. 119),
+chiamate `1NNCANON` sotto `DCIM` **[ispezione]**. Foto e video condividono
+la numerazione **[ispezione]**: un numero va scelto tra quelli non usati da
+nessun file della cartella. Che la galleria segua l'ordine dei numeri è
+**[DCF]**.
+
+**Foto.** Basta il nome giusto: una foto della fotocamera, duplicata e
+rinominata con un numero libero, compare nella galleria **[prova]**.
+
+**Catalogo.** `DCIM/CANONMSC/M0NNN.CTG` elenca i file della cartella, ma
+non serve né per le foto né per i video **[prova]**.
+
+**Video.** Servono due file con lo stesso numero **[prova]**:
+
+| File | Cosa contiene |
+|---|---|
+| `MVI_NNNN.AVI` | il filmato, in un AVI costruito esattamente come quelli della fotocamera |
+| `MVI_NNNN.THM` | JPEG 160x120 con un blocco Exif Canon **[ispezione]**: è il file di miniatura previsto dallo standard **[DCF]** |
+
+- Senza il THM il video non compare **[prova]**.
+- La durata che la galleria mostra viene dal THM, che contiene anche il
+  numero di fotogrammi **[ispezione]** **[prova]**.
+- Se il THM non concorda con l'AVI, il video compare ma non parte o si
+  ferma **[prova]**.
+- Il numero del file scritto nel THM non è determinante **[prova]**.
+
+Confrontando i THM di un clip per modalità (Standard 640, Standard 640 LP,
+Standard 320, Compact) **[ispezione]**:
+
+| Dove, nel MakerNote Canon | Cosa contiene |
+|---|---|
+| tabella `0x0001` (impostazioni), valore 10 | dimensione: 128 per 640x480, 129 per 320x240, 130 per 160x120 |
+| tabella `0x0001`, valore 3 | qualità: 134 in Standard LP, 130 altrimenti |
+| tabella `0x0011` (filmato), valori 2 e 4 | numero di fotogrammi |
+| tabella `0x0011`, valori 1, 6 e 9 | fps (30 o 15) |
+| tabella `0x0011`, valore 8 | 2 in Compact, 0 in Standard |
+| tabella `0x0011`, valore 19 | 1 in Standard LP, 0 altrimenti |
+| tabella `0x0026`, valori 4 e 5 | larghezza e altezza del video |
+
+Durante la riproduzione il display mostra dimensione e fps, per esempio
+"640/30", "640lp/30", "320/30", "160/15". La dimensione e il suffisso "lp"
+vengono dalla tabella `0x0001`, gli fps dalla `0x0011`. Con un THM che
+aggiornava solo la `0x0011`, i video convertiti da un modello Compact
+mostravano "160/30" anche a 320x240 e 640x480, pur riproducendosi
+correttamente **[prova]**.
+
+`video-per-canon` aggiorna tutti questi valori secondo il profilo, quindi
+il THM modello può venire da un clip di qualsiasi modalità. Partendo dal
+THM Compact e portandolo alle altre modalità, ogni THM ottenuto coincide
+con quello Canon della stessa modalità **[ispezione]**, salvo:
+
+- numero del file e numero di fotogrammi, che sono quelli del video;
+- il valore 11 della tabella `0x0011`, che cresce da un clip all'altro come
+  un contatore;
+- i valori 44 e 47 della tabella `0x0026`, il valore 1 della `0x0004` e i
+  16 byte del tag `0x0028`, che cambiano anche tra clip Canon della stessa
+  serie indipendentemente dalla modalità. I valori 44 e 47 sembrano punti
+  di messa a fuoco, il primo come maschera di bit (8, 16, 64, 256) e
+  `0x0028` un identificativo dell'immagine **[deduzione]**. Il THM prodotto
+  li copia dal modello, quindi tutti i video ricavati dallo stesso modello
+  hanno lo stesso identificativo.
+
+La fotocamera accetta un THM così ottenuto: lo stesso video, convertito
+nei quattro profili con il THM di un clip Compact, si riproduce e il
+display mostra "160/15", "320/30", "640/30" e "640lp/30" come per i clip
+Canon **[prova]**.
+
+Il codice aggiorna anche il valore 92 della tabella `0x000D`, ma solo se
+coincide con il numero di fotogrammi del modello, come in un THM esaminato
+in precedenza. Nei quattro THM di cui sopra non coincide (vale 98 o 103,
+senza relazione con i fotogrammi), quindi resta com'è, e i video appena
+citati si riproducono comunque **[prova]**.
+
+Il messaggio "Immagine non identificata" è quello che la guida prevede per
+immagini "manipolate su un computer, rinominate o riprese con un'altra
+fotocamera" **[Canon]** (p. 93 e risoluzione dei problemi): la fotocamera
+non garantisce di mostrare file che non ha prodotto lei. Quello che segue
+la convince che li ha prodotti lei.
+
+## Perché ffmpeg non basta
+
+Anche un semplice `ffmpeg -i MVI_1259.AVI -c copy`, che copia fotogrammi e
+audio identici, produce un file che la fotocamera rifiuta **[prova]**. A non
+andare è il contenitore. Un AVI Canon ("CanonMVI06") ha **[ispezione]**:
+
+- un'intestazione fissa di 2 KB: il blocco `LIST movi` inizia sempre a
+  `0x800`, con un `JUNK` di riempimento;
+- l'audio a blocchi di un secondo (11024 byte; l'ultimo può essere più
+  corto), ciascuno seguito da tanti fotogrammi quanti sono gli fps;
+- l'indice vero nei blocchi OpenDML `ix00`/`ix01` in fondo ai dati, mentre
+  `idx1` ha solo due voci (il primo blocco audio e il primo fotogramma).
+  ffmpeg fa il contrario;
+- la durata del fotogramma troncata (66666 µs a 15 fps), la data nel blocco
+  `IDIT` e il programma "CanonMVI06";
+- l'audio lungo quanto il video, arrotondato per eccesso al campione: 80
+  fotogrammi a 30 fps sono 29397,33 campioni, e la fotocamera ne scrive
+  29398 (due blocchi da 11024 e un ultimo blocco, più corto, da 7350).
+  Lo stesso vale per tutti e quattro i clip esaminati.
+
+Anche i fotogrammi sono diversi da quelli di ffmpeg **[ispezione]**:
+marcatore `AVI1` al posto di `JFIF`, un `DRI`, le due tabelle di
+quantizzazione (luma e croma) in un solo segmento `DQT`, nessuna tabella
+Huffman (si usano quelle standard del JPEG) e lunghezza sempre pari, con uno
+`00` dopo la fine dell'immagine quando serve.
+
+Soprattutto, il 4:2:2 Canon ha la luma campionata 2x1 e la croma 1x1
+(blocchi di 16x8 pixel), mentre ffmpeg scrive il 4:2:2 come luma 2x2 e
+croma 1x2 (blocchi di 16x16): un JPEG valido, che però la fotocamera a
+640x480 mostra a strisce verdi orizzontali, pur riproducendo il video per
+intero con l'audio giusto **[prova]**. Nessuna opzione di ffmpeg cambia il
+campionamento, perciò `video-per-canon` usa ffmpeg solo per decodificare e
+ridimensionare, e codifica i fotogrammi con Pillow, che produce lo stesso
+campionamento della Canon. Anche le miniature dei THM Canon sono 4:2:2 a
+blocchi 16x8, con un solo `DQT` e, a differenza dei fotogrammi, un solo
+`DHT` con tutte le tabelle Huffman **[ispezione]**: `video-per-canon` le
+costruisce allo stesso modo.
+
+`casoweb_tools.canon_avi` riproduce questa struttura: rigenerando un AVI
+della fotocamera dai suoi fotogrammi e dal suo audio si ottiene un file
+**identico byte per byte**, in tutte le modalità: Compact, 320x240, 640x480
+e 640x480 LP **[ispezione]**. A 30 fps ogni blocco ha un secondo di audio e 30
+fotogrammi.
+
+## Uso
+
+```bash
+casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
+    --cartella /media/$USER/SCHEDA/DCIM/101CANON
+```
+
+- `--thm-modello` è un `.THM` qualsiasi prodotto dalla fotocamera: lo
+  script ne riusa il blocco Exif, aggiornando date, numero del file
+  (cartella × 10000 + numero, es. 1011266) e dati del video (fotogrammi,
+  fps, dimensioni, modalità; vedi sopra). Così nel codice non c'è nessun
+  dato di una fotocamera specifica.
+- `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
+  THM.
+- `--profilo` sceglie la modalità: `compatto` (predefinito, 160x120 a 15
+  fps), `320x240`, `640x480` o `640x480-lp` (Standard a 30 fps).
+- I fotogrammi partono dalla qualità JPEG che la fotocamera tiene a regime
+  in quella modalità (vedi sopra; si cambia con `--qualita`, da 1 a 95). La
+  qualità resta fissa per tutto il video, senza il controllo del bitrate
+  della fotocamera. Nel profilo `compatto` lo script abbassa la qualità
+  finché il fotogramma più pesante resta sotto i 5000 byte
+  (`--max-fotogramma`): un limite prudenziale, un po' sotto i 5,6 KB del
+  clip Compact esaminato (vedi sopra). Stampa poi dimensione media e
+  massima.
+- `--durata` taglia il video ai primi N secondi.
+- `casoweb -v DEBUG video-per-canon ...` mostra anche i comandi ffmpeg
+  lanciati; `-v WARNING` lascia solo gli avvisi.
+- Fotogrammi e AVI sono tenuti interamente in memoria: pochi MB per un
+  clip breve, ma diversi GB per un clip Standard di decine di minuti.
+- La miniatura del THM è presa a un terzo del video, non dal primo
+  fotogramma, che è spesso nero per una dissolvenza o un titolo.
+- Un video senza audio riceve una traccia di silenzio.
+- Servono ffmpeg, per decodificare il video, e Pillow, per codificare i
+  JPEG (si installa con il pacchetto).
+- Avvisa quando il video supera la durata massima che la fotocamera
+  registrerebbe in quella modalità (3 minuti in Compact) o i 4 GB. Non si
+  sa se la fotocamera rifiuti un file più lungo **[deduzione]**: l'avviso
+  serve a non scoprirlo per caso.
+- Copiare sempre AVI e THM insieme.
+
+## Stato delle verifiche
+
+| | Esito |
+|---|---|
+| Foto copiata e rinominata | si vede **[prova]** |
+| Catalogo `.CTG` | non serve **[prova]** |
+| AVI rimuxato da ffmpeg | rifiutato **[prova]** |
+| AVI di `canon_avi` con fotogrammi Canon e THM coerente | si riproduce **[prova]** |
+| Video qualsiasi convertito, profilo `compatto`, JPEG di ffmpeg (16x16) | si riproduce **[prova]** |
+| THM con numero del file non aggiornato | si riproduce **[prova]** |
+| THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
+| Struttura AVI di 320x240, 640x480 e 640x480 LP | rigenerata identica da file Canon **[ispezione]** |
+| Video convertito a 640x480 con i JPEG di ffmpeg (16x16), THM da un clip Compact | si riproduce per intero con l'audio, ma a strisce verdi **[prova]** |
+| Video convertito a 640x480 con i JPEG di Pillow (16x8, qualità 92), THM da un clip Compact | si riproduce correttamente **[prova]** |
+| Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]** |
+| Lo stesso video convertito con tutti e quattro i profili, JPEG di Pillow con le qualità predefinite (84 dopo il limite di 5000 byte in `compatto`, 90, 86, 72), THM da un clip Compact | si riproducono tutti, immagine e audio corretti **[prova]** |
+| Profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]** |
+| THM che aggiorna solo la tabella `0x0011`, modello Compact | il display mostra "160/30" a 320x240 e 640x480 **[prova]** |
+| THM che aggiorna anche la tabella `0x0001`, modello Compact | coincide con i THM Canon nei campi della modalità **[ispezione]**; il display mostra "160/15", "320/30", "640/30", "640lp/30" **[prova]** |
+| Clip più lunghi della durata massima | da provare |
+
+Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con
+fotogrammi da 6-7 KB dipendesse dalla loro dimensione o dai metadati
+incoerenti, perché nella prova successiva sono cambiate entrambe le cose.
+Per prudenza il limite resta, anche se il clip Compact esaminato poi arriva
+a 5,6 KB.
+
+Per confermare un profilo serve un esemplare vero di quella modalità
+(bastano pochi secondi di AVI e THM): se
+
+```bash
+casoweb video-per-canon --verifica MVI_NNNN.AVI
+```
+
+lo rigenera identico, la struttura è confermata.
+
+## Fonti
+
+- Canon, *PowerShot A2000 IS Camera User Guide* (CDI-E388-010, 2008),
+  [PDF in inglese sul sito di download Canon](http://gdlp01.c-wss.com/gds/5/0300001235/01/PSA2000IS_CUG_EN.pdf):
+  modalità video (p. 90), durate e limiti dei clip (p. 91), numerazione dei
+  file e cartelle (p. 119), messaggi per i file non riconosciuti (p. 93 e
+  risoluzione dei problemi). In italiano dalla
+  [pagina di supporto Canon Italia](https://www.canon.it/support/consumer/products/cameras/powershot/a-series/powershot-a2000-is.html?type=manuals).
+- Canon, [specifiche della PowerShot A2000 IS](https://in.canon/en/support/6200025000):
+  formati, modalità video e conformità DCF e DPOF.
+- [Design rule for Camera File system](https://en.wikipedia.org/wiki/Design_rule_for_Camera_File_system)
+  (Wikipedia): cartelle, nomi dei file ed estensione THM per le miniature.
