@@ -124,7 +124,7 @@ def test_patch_exif_aggiorna_numero_fotogrammi_e_date(tmp_path):
     nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), quando, 1011266, 45)
     assert leggi_makernote(nuovo) == {"numero_file": 1011266, "fotogrammi": (45, 45, 45),
                                       "date": ["2026:10:16 08:22:00"] * 2, "fps": (15, 15, 15),
-                                      "modalita": (2, 0), "dimensioni": (160, 120)}
+                                      "modalita": (130, 130, 2, 0), "dimensioni": (160, 120)}
 
 
 @needs_ffmpeg
@@ -133,16 +133,29 @@ def test_patch_exif_da_modello_compact_a_standard(tmp_path):
     nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480),
                               vc.MODALITA_THM["640x480"])
     mn = leggi_makernote(nuovo)
-    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (0, 0), (640, 480))
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (128, 130, 0, 0), (640, 480))
 
 
 @needs_ffmpeg
 def test_patch_exif_azzera_indicatore_lp(tmp_path):
-    modello = thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), codice_modalita=0, lp=1)
+    modello = thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), modalita=(128, 134, 0, 1))
     nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 45, 15, (160, 120),
                               vc.MODALITA_THM["compatto"])
     mn = leggi_makernote(nuovo)
-    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (130, 130, 2, 0), (160, 120))
+
+
+@needs_ffmpeg
+def test_patch_exif_modalita_reali(tmp_path):
+    # valori dei THM Canon reali, uno per modalità: dimensione mostrata dal display, qualità, codice, LP
+    attesi = {"compatto": (130, 130, 2, 0), "320x240": (129, 130, 0, 0), "640x480": (128, 130, 0, 0),
+              "640x480-lp": (128, 134, 0, 1)}
+    modello = thm(_jpeg(tmp_path))
+    for profilo, valori in attesi.items():
+        w, h, fps = vc.PROFILI[profilo][:3]
+        nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, fps, (w, h),
+                                  vc.MODALITA_THM[profilo])
+        assert leggi_makernote(nuovo)["modalita"] == valori
 
 
 @needs_ffmpeg
@@ -151,7 +164,7 @@ def test_patch_exif_imposta_indicatore_lp(tmp_path):
     nuovo = vc.thm_da_modello(modello, _jpeg(tmp_path), time.localtime(), 1011266, 90, 30, (640, 480),
                               vc.MODALITA_THM["640x480-lp"])
     mn = leggi_makernote(nuovo)
-    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (0, 1), (640, 480))
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((30, 30, 30), (128, 134, 0, 1), (640, 480))
 
 
 def test_ogni_profilo_ha_modalita_e_durata():
@@ -173,7 +186,7 @@ def test_conversione_completa(tmp_path):
                     "-f", "lavfi", "-i", "sine=d=2", "-shortest", str(video)], check=True)
     modello = tmp_path / "MVI_1259.THM"
     # modello da un clip 640x480 LP: il THM prodotto deve comunque descrivere un Compact
-    modello.write_bytes(thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), codice_modalita=0, lp=1))
+    modello.write_bytes(thm(_jpeg(tmp_path), fps=30, dimensioni=(640, 480), modalita=(128, 134, 0, 1)))
     sd = tmp_path / "DCIM" / "101CANON"
 
     res = CliRunner().invoke(main, ["video-per-canon", str(video), "--numero", "1266",
@@ -186,7 +199,7 @@ def test_conversione_completa(tmp_path):
     assert max(len(f) for f in frames) <= vc.PROFILI["compatto"][4]
     mn = leggi_makernote((sd / "MVI_1266.THM").read_bytes())
     assert mn["numero_file"] == 1011266 and mn["fotogrammi"] == (30, 30, 30)
-    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (2, 0), (160, 120))
+    assert (mn["fps"], mn["modalita"], mn["dimensioni"]) == ((15, 15, 15), (130, 130, 2, 0), (160, 120))
 
     res = CliRunner().invoke(main, ["video-per-canon", "--verifica", str(sd / "MVI_1266.AVI")])
     assert res.exit_code == 0 and "identico byte per byte" in res.output

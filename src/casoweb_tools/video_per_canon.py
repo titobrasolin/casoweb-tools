@@ -58,9 +58,16 @@ PROFILI = {
     "640x480-lp": (640, 480, 30, 72, None),
 }
 VERIFICATI = {"compatto", "320x240", "640x480", "640x480-lp"}
-# modalità nel THM (tabella 0x0011): (valore 8: 2 in Compact, 0 in Standard; valore 19: 1 se LP),
-# osservata su clip della fotocamera
-MODALITA_THM = {"compatto": (2, 0), "320x240": (0, 0), "640x480": (0, 0), "640x480-lp": (0, 1)}
+# modalità nel THM, osservata su un clip della fotocamera per modalità:
+#   tabella 0x0001 (impostazioni), valore 10: dimensione, che il display mostra (128 = 640, 129 = 320, 130 = 160)
+#   tabella 0x0001, valore 3: qualità (130 = normale, 134 = LP, mostrata come "640lp")
+#   tabella 0x0011 (filmato), valore 8: 2 in Compact, 0 in Standard; valore 19: 1 se LP
+MODALITA_THM = {  # (dimensione, qualità, codice 0x0011, indicatore LP)
+    "compatto": (130, 130, 2, 0),
+    "320x240": (129, 130, 0, 0),
+    "640x480": (128, 130, 0, 0),
+    "640x480-lp": (128, 134, 0, 1),
+}
 # durata massima di un clip registrato dalla fotocamera (circa 3 minuti in Compact, 1 ora in
 # Standard) e dimensione massima del file in Standard (4 GB)
 DURATA_MASSIMA = {"compatto": 180, "320x240": 3600, "640x480": 3600, "640x480-lp": 3600}
@@ -134,10 +141,10 @@ def _tiff_ifd(tiff: bytes, off: int) -> dict[int, int]:
 
 def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file: int | None = None,
                fotogrammi: int | None = None, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
-               modalita: tuple[int, int] | None = None) -> bytes:
+               modalita: tuple[int, int, int, int] | None = None) -> bytes:
     """Aggiorna nel blocco Exif del THM: date, numero del file (cartella*10000+numero) e dati del video.
 
-    modalita: (codice della modalità, indicatore LP), come in MODALITA_THM.
+    modalita: (dimensione, qualità, codice della modalità, indicatore LP), come in MODALITA_THM.
     """
     app1 = bytearray(app1)
     if quando is not None:
@@ -170,8 +177,13 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
         for pos in (1, 6, 9):
             struct.pack_into("<H", tiff, voff + 2 * pos, fps)
     if modalita is not None:
-        struct.pack_into("<H", tiff, voff + 2 * 8, modalita[0])
-        struct.pack_into("<H", tiff, voff + 2 * 19, modalita[1])
+        dimensione, qualita, codice, lp = modalita
+        struct.pack_into("<H", tiff, voff + 2 * 8, codice)
+        struct.pack_into("<H", tiff, voff + 2 * 19, lp)
+        if 0x0001 in ent:  # tabella a 16 bit delle impostazioni: [3] = qualità, [10] = dimensione
+            voff = u32(ent[0x0001] + 8)
+            struct.pack_into("<H", tiff, voff + 2 * 3, qualita)
+            struct.pack_into("<H", tiff, voff + 2 * 10, dimensione)
     if dimensioni is not None and 0x0026 in ent:  # tabella a 16 bit: [4] e [5] = larghezza e altezza
         voff = u32(ent[0x0026] + 8)
         struct.pack_into("<2H", tiff, voff + 2 * 4, *dimensioni)
@@ -180,7 +192,7 @@ def patch_exif(app1: bytes, quando: time.struct_time | None = None, numero_file:
 
 def thm_da_modello(modello: bytes, jpeg160: bytes, quando: time.struct_time, numero_file: int,
                    fotogrammi: int, fps: int | None = None, dimensioni: tuple[int, int] | None = None,
-                   modalita: tuple[int, int] | None = None) -> bytes:
+                   modalita: tuple[int, int, int, int] | None = None) -> bytes:
     if modello[:4] != b"\xff\xd8\xff\xe1":
         raise SystemExit("Il THM modello non ha un blocco Exif: serve un .THM prodotto dalla fotocamera.")
     ln = struct.unpack(">H", modello[4:6])[0]

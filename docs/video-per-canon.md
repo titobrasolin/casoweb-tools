@@ -83,20 +83,40 @@ Standard 320, Compact) **[ispezione]**:
 
 | Dove, nel MakerNote Canon | Cosa contiene |
 |---|---|
-| tabella `0x0011`, valori 2 e 4 | numero di fotogrammi |
+| tabella `0x0001` (impostazioni), valore 10 | dimensione: 128 per 640x480, 129 per 320x240, 130 per 160x120 |
+| tabella `0x0001`, valore 3 | qualità: 134 in Standard LP, 130 altrimenti |
+| tabella `0x0011` (filmato), valori 2 e 4 | numero di fotogrammi |
 | tabella `0x0011`, valori 1, 6 e 9 | fps (30 o 15) |
 | tabella `0x0011`, valore 8 | 2 in Compact, 0 in Standard |
 | tabella `0x0011`, valore 19 | 1 in Standard LP, 0 altrimenti |
 | tabella `0x0026`, valori 4 e 5 | larghezza e altezza del video |
 
-`video-per-canon` aggiorna tutti questi valori secondo il profilo, compreso
-l'indicatore LP (1 solo con `640x480-lp`), quindi il THM modello può venire
-da un clip di qualsiasi modalità. Partendo dal THM Compact o da quello LP e portandoli a Standard
-640, la tabella `0x0011` coincide con quella del THM Standard 640, salvo il
-valore 11, che cresce da un clip all'altro come un contatore
-**[ispezione]**. Nella tabella `0x0026` restano diversi i valori 44 e 47,
-di significato ignoto. La fotocamera accetta un THM così ottenuto: un
-video 640x480 con il THM di un clip Compact si riproduce **[prova]**.
+Durante la riproduzione il display mostra dimensione e fps, per esempio
+"640/30", "640lp/30", "320/30", "160/15". La dimensione e il suffisso "lp"
+vengono dalla tabella `0x0001`, gli fps dalla `0x0011`. Con un THM che
+aggiornava solo la `0x0011`, i video convertiti da un modello Compact
+mostravano "160/30" anche a 320x240 e 640x480, pur riproducendosi
+correttamente **[prova]**.
+
+`video-per-canon` aggiorna tutti questi valori secondo il profilo, quindi
+il THM modello può venire da un clip di qualsiasi modalità. Partendo dal
+THM Compact e portandolo alle altre modalità, ogni THM ottenuto coincide
+con quello Canon della stessa modalità **[ispezione]**, salvo:
+
+- numero del file e numero di fotogrammi, che sono quelli del video;
+- il valore 11 della tabella `0x0011`, che cresce da un clip all'altro come
+  un contatore;
+- i valori 44 e 47 della tabella `0x0026`, il valore 1 della `0x0004` e i
+  16 byte del tag `0x0028`, che cambiano anche tra clip Canon della stessa
+  serie indipendentemente dalla modalità. I valori 44 e 47 sembrano punti
+  di messa a fuoco, il primo come maschera di bit (8, 16, 64, 256) e
+  `0x0028` un identificativo dell'immagine **[deduzione]**. Il THM prodotto
+  li copia dal modello, quindi tutti i video ricavati dallo stesso modello
+  hanno lo stesso identificativo.
+
+La fotocamera accetta un THM così ottenuto: lo stesso video, convertito
+nei quattro profili con il THM di un clip Compact, si riproduce
+**[prova]**.
 
 Il codice aggiorna anche il valore 92 della tabella `0x000D`, ma solo se
 coincide con il numero di fotogrammi del modello, come in un THM esaminato
@@ -204,7 +224,8 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]** |
 | Lo stesso video convertito con tutti e quattro i profili, JPEG di Pillow con le qualità predefinite (84 dopo il limite di 5000 byte in `compatto`, 90, 86, 72), THM da un clip Compact | si riproducono tutti, immagine e audio corretti **[prova]** |
 | Profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]** |
-| Informazioni sul video mostrate dal display (risoluzione, modalità) | da verificare |
+| THM che aggiorna solo la tabella `0x0011`, modello Compact | il display mostra "160/30" a 320x240 e 640x480 **[prova]** |
+| THM che aggiorna anche la tabella `0x0001` | coincide con i THM Canon nei campi della modalità **[ispezione]**; display da riprovare |
 | Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con
