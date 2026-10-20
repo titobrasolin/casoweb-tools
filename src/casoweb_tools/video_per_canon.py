@@ -48,13 +48,13 @@ PROFILI = {
     # fotocamera; fotogrammi Canon da 1,7 a 5,6 KB, qualità ~90
     "compatto": (160, 120, 15, 90, 5000),
     # Standard 320x240. Struttura verificata byte per byte su un file Canon (fotogrammi
-    # da 11 a 22 KB, qualità ~90); conversione non ancora provata sulla fotocamera
+    # da 11 a 22 KB, qualità ~90); conversione provata sulla fotocamera
     "320x240": (320, 240, 30, 90, None),
     # Standard 640x480. Struttura verificata byte per byte su file Canon (fotogrammi fino a
     # 68 KB, qualità tra 85 e 88); conversione provata sulla fotocamera
     "640x480": (640, 480, 30, 86, None),
     # Standard LP 640x480: stessa struttura (verificata byte per byte su un file Canon) con
-    # fotogrammi circa a metà (fino a 34 KB, qualità tra 68 e 75); non ancora provata
+    # fotogrammi circa a metà (fino a 34 KB, qualità tra 68 e 75); conversione provata sulla fotocamera
     "640x480-lp": (640, 480, 30, 72, None),
 }
 VERIFICATI = {"compatto", "320x240", "640x480", "640x480-lp"}

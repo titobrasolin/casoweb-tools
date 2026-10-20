@@ -18,9 +18,9 @@ Ogni affermazione qui sotto ha una fonte, indicata così:
 | Modalità | Risoluzione | fps | Durata massima di un clip | Stato in `video-per-canon` |
 |---|---|---|---|---|
 | Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
-| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]** |
+| Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
 | Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]**, conversione provata **[prova]** |
-| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480-lp`: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]** |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480-lp`: qualità più bassa e durata doppia **[Canon]**; struttura verificata, uguale allo Standard con fotogrammi più compressi **[ispezione]**, conversione provata **[prova]** |
 
 Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
 dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
@@ -196,15 +196,15 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | AVI rimuxato da ffmpeg | rifiutato **[prova]** |
 | AVI di `canon_avi` con fotogrammi Canon e THM coerente | si riproduce **[prova]** |
 | Video qualsiasi convertito, profilo `compatto`, JPEG di ffmpeg (16x16) | si riproduce **[prova]** |
-| Video qualsiasi convertito, profilo `compatto`, JPEG di Pillow (16x8) | da riprovare sulla fotocamera |
 | THM con numero del file non aggiornato | si riproduce **[prova]** |
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
 | Struttura AVI di 320x240, 640x480 e 640x480 LP | rigenerata identica da file Canon **[ispezione]** |
 | Video convertito a 640x480 con i JPEG di ffmpeg (16x16), THM da un clip Compact | si riproduce per intero con l'audio, ma a strisce verdi **[prova]** |
 | Video convertito a 640x480 con i JPEG di Pillow (16x8, qualità 92), THM da un clip Compact | si riproduce correttamente **[prova]** |
-| Video convertito, profilo `320x240` | da provare sulla fotocamera |
 | Modalità LP | stessa struttura dello Standard, fotogrammi circa a metà (30 KB invece di 61 KB), indicatore LP nel THM **[ispezione]** |
-| Video convertito, profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]**; da provare sulla fotocamera |
+| Lo stesso video convertito con tutti e quattro i profili, JPEG di Pillow con le qualità predefinite (84 dopo il limite di 5000 byte in `compatto`, 90, 86, 72), THM da un clip Compact | si riproducono tutti, immagine e audio corretti **[prova]** |
+| Profilo `640x480-lp` | fotogrammi come quelli Canon LP (in media 28,5 KB, al massimo 34 KB) **[ispezione]** |
+| Informazioni sul video mostrate dal display (risoluzione, modalità) | da verificare |
 | Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato nel Compact con

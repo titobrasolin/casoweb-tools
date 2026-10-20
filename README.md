@@ -101,7 +101,7 @@ casoweb <comando> --help
 |---|---|---|
 | `casoweb separa-parlato` | Separa parlato e musica in una registrazione (trasmissione radio, podcast, conferenza...), produce l'audio col solo parlato e quello con la musica silenziata, e i rispettivi sottotitoli `.srt` (faster-whisper, GPU se disponibile). | [Dall'intervista radio ai sottotitoli, senza la musica](https://www.casoweb.eu/?view=article&id=307&catid=90) |
 | `casoweb video-da-audio` | Trasforma un audio con i suoi sottotitoli in video con sfondo fisso, in più profili: YouTube, web, WhatsApp (sotto i 16 MB per mezz'ora), quadrato e verticale. | idem |
-| `casoweb video-per-canon` | Converte un video qualsiasi nella coppia `MVI_NNNN.AVI` + `.THM` che una vecchia Canon PowerShot riproduce sul proprio display (provato sulla A2000 IS, 160x120 a 15 fps e 640x480 a 30 fps). Richiede ffmpeg; Pillow si installa con il pacchetto. | in preparazione |
+| `casoweb video-per-canon` | Converte un video qualsiasi nella coppia `MVI_NNNN.AVI` + `.THM` che una vecchia Canon PowerShot riproduce sul proprio display (provato sulla A2000 IS in tutte e quattro le modalità video: Compact 160x120 e Standard 320x240, 640x480 e 640x480 LP). Richiede ffmpeg; Pillow si installa con il pacchetto. | in preparazione |
 
 Flusso tipico:
 
