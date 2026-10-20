@@ -20,7 +20,7 @@ Ogni affermazione qui sotto ha una fonte, indicata così:
 | Compact | 160x120 | 15 | circa 3 minuti | profilo `compatto`, verificato **[ispezione]** **[prova]** |
 | Standard | 320x240 | 30 | circa 1 ora o 4 GB | profilo `320x240`, struttura verificata **[ispezione]** |
 | Standard | 640x480 | 30 | circa 1 ora o 4 GB | profilo `640x480`, struttura verificata **[ispezione]** |
-| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**, nessun file esaminato |
+| Standard LP | 640x480 | 30 | circa 1 ora o 4 GB | nessun profilo: qualità più bassa e durata doppia **[Canon]**; stesso AVI dello Standard con fotogrammi più compressi **[ispezione]** |
 
 Modalità, risoluzioni, durate e la descrizione di LP vengono dalla guida
 dell'utente, pp. 90-91 **[Canon]**. Il formato è AVI con video Motion JPEG
@@ -55,6 +55,22 @@ non serve né per le foto né per i video **[prova]**.
 - Se il THM non concorda con l'AVI, il video compare ma non parte o si
   ferma **[prova]**.
 - Il numero del file scritto nel THM non è determinante **[prova]**.
+
+Confrontando i THM di un clip per modalità (Standard 640, Standard 640 LP,
+Standard 320, Compact) **[ispezione]**:
+
+| Dove, nel MakerNote Canon | Cosa contiene |
+|---|---|
+| tabella `0x0011`, valori 2 e 4 | numero di fotogrammi |
+| tabella `0x0011`, valori 1, 6 e 9 | fps (30 o 15) |
+| tabella `0x0011`, valore 8 | 2 in Compact, 0 in Standard |
+| tabella `0x0011`, valore 19 | 1 in Standard LP, 0 altrimenti |
+| tabella `0x0026`, valori 4 e 5 | larghezza e altezza del video |
+
+`video-per-canon` aggiorna solo il numero di fotogrammi, quindi il THM
+modello va preso da un clip della stessa modalità del profilo: con un THM
+Compact per un video a 30 fps la durata mostrata sarebbe doppia
+**[deduzione]**.
 
 Il messaggio "Immagine non identificata" è quello che la guida prevede per
 immagini "manipolate su un computer, rinominate o riprese con un'altra
@@ -97,8 +113,8 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
     --cartella /media/$USER/SCHEDA/DCIM/101CANON
 ```
 
-- `--thm-modello` è un `.THM` qualsiasi prodotto dalla fotocamera: lo
-  script ne riusa il blocco Exif, aggiornando date, numero del file
+- `--thm-modello` è un `.THM` prodotto dalla fotocamera nella stessa
+  modalità del profilo (vedi sopra): lo script ne riusa il blocco Exif, aggiornando date, numero del file
   (cartella × 10000 + numero, es. 1011266) e numero di fotogrammi. Così nel
   codice non c'è nessun dato di una fotocamera specifica.
 - `--cartella-fotocamera` (101 per `101CANON`) entra nel numero scritto nel
@@ -125,7 +141,7 @@ casoweb video-per-canon video.mp4 --numero 1266 --thm-modello MVI_1259.THM \
 | THM con numero di fotogrammi diverso dall'AVI | compare ma non parte **[prova]** |
 | Struttura AVI dei profili `320x240` e `640x480` | rigenerata identica da file Canon **[ispezione]** |
 | Video convertito, profili `320x240` e `640x480` | da provare sulla fotocamera |
-| Modalità LP | da esplorare: con un file Canon si capirà se basta comprimere di più o se cambia anche il THM |
+| Modalità LP | AVI identico allo Standard con fotogrammi circa a metà (30 KB invece di 61 KB); il THM ha un indicatore LP **[ispezione]**. Nessun profilo per ora |
 | Clip più lunghi della durata massima | da provare |
 
 Resta aperto se l'arresto dopo 5 secondi osservato con fotogrammi da 6-7 KB
