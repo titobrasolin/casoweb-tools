@@ -20,6 +20,8 @@ separa-parlato = [
     "faster-whisper",
     "numpy",
 ]
+# YAMNet in versione TFLite: pochi MB, nessun tensorflow
+rileva-suoni = ["ai-edge-litert", "numpy"]
 # PC senza GPU NVIDIA: va usato insieme a scripts/overrides-cpu.txt (vedi README),
 # altrimenti si installano sia tensorflow sia tensorflow-cpu
 cpu = ["tensorflow-cpu; python_version < '3.13'"]

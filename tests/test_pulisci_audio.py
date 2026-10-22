@@ -100,3 +100,31 @@ def test_motore_finto(tmp_path, monkeypatch):
     res = CliRunner().invoke(main, ["pulisci-audio", str(src), "--motore", "deepfilternet"])
     assert res.exit_code == 0, res.output
     assert (tmp_path / "a_pulito.wav").stat().st_size > 0
+
+
+def test_sottrai():
+    assert pa.sottrai([(0, 10)], [(2, 3), (5, 6)]) == [(0, 2), (3, 5), (6, 10)]
+    assert pa.sottrai([(0, 10)], [(0, 10)]) == []
+    assert pa.sottrai([(0, 4), (8, 12)], [(3, 9)]) == [(0, 3), (9, 12)]
+    assert pa.sottrai([(0, 4)], [(5, 6)]) == [(0, 4)]
+
+
+def test_escludi_senza_segmenti(tmp_path):
+    f = tmp_path / "a.wav"
+    f.write_bytes(b"x")
+    t = tmp_path / "e.tsv"
+    t.write_text(TSV, encoding="utf-8")
+    res = CliRunner().invoke(main, ["pulisci-audio", str(f), "--escludi", str(t)])
+    assert res.exit_code != 0 and "--segmenti" in res.output
+
+
+@ffmpeg
+def test_pulizia_con_escludi(tmp_path):
+    src = tmp_path / "serata.wav"
+    _sinusoide(src)
+    tsv = tmp_path / "s.tsv"
+    tsv.write_text(TSV, encoding="utf-8")
+    ap = tmp_path / "ap.tsv"
+    ap.write_text("inizio_s\tfine_s\tetichetta\n1.200\t1.800\tApplause\n", encoding="utf-8")
+    res = CliRunner().invoke(main, ["pulisci-audio", str(src), "--segmenti", str(tsv), "--escludi", str(ap)])
+    assert res.exit_code == 0, res.output
