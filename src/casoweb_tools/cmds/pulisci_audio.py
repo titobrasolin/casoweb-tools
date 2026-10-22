@@ -37,13 +37,16 @@ Esempi:
 @click.option("--segmenti", type=click.Path(exists=True, dir_okay=False, path_type=Path),
               help="TSV di `casoweb separa-parlato`: il trattamento forte va solo ai tratti 'parlato', "
                    "la musica riceve solo un ritocco leggero [default: tutto trattato allo stesso modo].")
+@click.option("--escludi", type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="TSV di `casoweb rileva-suoni`: i tratti indicati (es. gli applausi) restano come nell'originale, "
+                   "anche se cadono nel parlato. Richiede --segmenti.")
 @click.option("--dissolvenza", type=float, default=0.4, show_default=True,
               help="Secondi di dissolvenza incrociata tra parlato e musica (con --segmenti).")
 @click.option("--post-filtro/--senza-post-filtro", default=False,
               help="Con deepfilternet: post-filtro (--pf), più incisivo sul rumore ma più artificiale.")
 @click.option("--volume-finale", is_flag=True, help="Porta il volume a -16 LUFS (loudnorm) alla fine.")
 @click.option("--tieni-temporanei", is_flag=True, help="Non cancella i file intermedi (per capire cosa è successo).")
-def pulisci_audio(ingresso: Path, uscita: Path | None, profilo: str, motore: str, segmenti: Path | None,
+def pulisci_audio(ingresso: Path, uscita: Path | None, profilo: str, motore: str, segmenti: Path | None, escludi: Path | None,
                   dissolvenza: float, post_filtro: bool, volume_finale: bool, tieni_temporanei: bool) -> None:
     """Ripulisce l'audio di una registrazione in presa diretta (anche dentro un video).
 
@@ -52,6 +55,6 @@ def pulisci_audio(ingresso: Path, uscita: Path | None, profilo: str, motore: str
     mono (copiato su due canali). Richiede ffmpeg, e per --motore deepfilternet
     il programma DeepFilterNet.
     """
-    core.run(ingresso, uscita=uscita, profilo=profilo, motore=motore, segmenti=segmenti,
+    core.run(ingresso, uscita=uscita, profilo=profilo, motore=motore, segmenti=segmenti, escludi=escludi,
              dissolvenza=dissolvenza, post_filtro=post_filtro, volume_finale=volume_finale,
              tieni_temporanei=tieni_temporanei)

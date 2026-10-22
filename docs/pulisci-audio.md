@@ -25,6 +25,18 @@ casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv --motore deepfil
 Se l'ingresso ha un video, viene copiato senza ricodificarlo e si sostituisce
 solo l'audio. Il parlato ripulito esce in mono (copiato su due canali).
 
+## Applausi
+
+Gli applausi dentro un tratto etichettato `parlato` verrebbero trattati come voce
+(gate e compressore li rovinano). Con `casoweb rileva-suoni` si ottiene un TSV
+dei tratti di applauso, da passare a `--escludi`: quei tratti restano come
+nell'originale.
+
+```bash
+casoweb rileva-suoni serata.mp4
+casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv --escludi serata_suoni.tsv
+```
+
 ## Profili (`--profilo`)
 
 | profilo | cosa fa |
