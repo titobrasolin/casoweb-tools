@@ -121,6 +121,7 @@ Con `-v WARNING` restano solo avvisi ed errori.
 | Comando | Cosa fa | Articolo |
 |---|---|---|
 | `casoweb separa-parlato` | Separa parlato e musica in una registrazione (trasmissione radio, podcast, conferenza...), produce l'audio col solo parlato e quello con la musica silenziata, e i rispettivi sottotitoli `.srt` (faster-whisper, GPU se disponibile). | [Dall'intervista radio ai sottotitoli, senza la musica](https://www.casoweb.eu/?view=article&id=307&catid=90) |
+| `casoweb pulisci-audio` | Ripulisce l'audio di una registrazione in presa diretta (rumore, rimbombo, volume), con trattamenti diversi per parlato e musica; motore ffmpeg o DeepFilterNet. Vedi [docs/pulisci-audio.md](docs/pulisci-audio.md). | in preparazione |
 | `casoweb video-da-audio` | Trasforma un audio con i suoi sottotitoli in video con sfondo fisso, in più profili: YouTube, web, WhatsApp (sotto i 16 MB per mezz'ora), quadrato e verticale. | idem |
 | `casoweb video-per-canon` | Converte un video qualsiasi nella coppia `MVI_NNNN.AVI` + `.THM` che una vecchia Canon PowerShot riproduce sul proprio display (provato sulla A2000 IS in tutte e quattro le modalità video: Compact 160x120 e Standard 320x240, 640x480 e 640x480 LP). Richiede ffmpeg; Pillow si installa con il pacchetto. | in preparazione |
 
