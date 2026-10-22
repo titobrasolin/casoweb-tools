@@ -102,6 +102,35 @@ def leggi_parlato(tsv: Path) -> list[tuple[float, float]]:
     return sorted(out)
 
 
+def leggi_intervalli(tsv: Path) -> list[tuple[float, float]]:
+    """Tutti gli intervalli di un TSV (di qualsiasi etichetta), es. quello di `rileva-suoni`."""
+    out = []
+    for riga in tsv.read_text(encoding="utf-8").splitlines():
+        if not riga.strip() or riga.startswith("#") or riga.startswith("inizio_s"):
+            continue
+        col = riga.split("\t")
+        out.append((float(col[0].replace(",", ".")), float(col[1].replace(",", "."))))
+    return sorted(out)
+
+
+def sottrai(intervalli: list[tuple[float, float]], esclusi: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Gli `intervalli` privati dei tratti `esclusi` (entrambi ordinati, ciascuno senza sovrapposizioni)."""
+    out = []
+    for a, b in intervalli:
+        inizio = a
+        for x, y in esclusi:
+            if y <= inizio or x >= b:
+                continue
+            if x > inizio:
+                out.append((inizio, x))
+            inizio = max(inizio, y)
+            if inizio >= b:
+                break
+        if inizio < b:
+            out.append((inizio, b))
+    return out
+
+
 def espressione_gate(intervalli: list[tuple[float, float]], dissolvenza: float) -> str:
     """Espressione ffmpeg g(t) in [0, 1]: 1 dentro gli intervalli, rampa lineare di `dissolvenza` secondi ai bordi.
 
@@ -193,7 +222,7 @@ def elenca_profili() -> None:
 # Programma
 # --------------------------------------------------------------------------
 def run(ingresso: Path, *, uscita: Path | None, profilo: str, motore: str, segmenti: Path | None,
-        dissolvenza: float, post_filtro: bool, volume_finale: bool, tieni_temporanei: bool) -> Path:
+        escludi: Path | None = None, dissolvenza: float, post_filtro: bool, volume_finale: bool, tieni_temporanei: bool) -> Path:
     for b in ("ffmpeg", "ffprobe"):
         if shutil.which(b) is None:
             raise SystemExit(manca_programma("ffmpeg"))
@@ -212,6 +241,12 @@ def run(ingresso: Path, *, uscita: Path | None, profilo: str, motore: str, segme
         intervalli = leggi_parlato(segmenti)
         if not intervalli:
             raise SystemExit(f"Nessun tratto 'parlato' in {segmenti.name}.")
+        if escludi is not None:
+            intervalli = sottrai(intervalli, leggi_intervalli(escludi))
+            if not intervalli:
+                raise SystemExit("Dopo aver tolto i tratti di --escludi non resta parlato da trattare.")
+    elif escludi is not None:
+        raise SystemExit("--escludi si usa insieme a --segmenti.")
 
     video = ha_video(ingresso)
     uscita = uscita or uscita_predefinita(ingresso, video)
