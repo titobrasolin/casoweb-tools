@@ -100,3 +100,34 @@ def test_motore_finto(tmp_path, monkeypatch):
     res = CliRunner().invoke(main, ["pulisci-audio", str(src), "--motore", "deepfilternet"])
     assert res.exit_code == 0, res.output
     assert (tmp_path / "a_pulito.wav").stat().st_size > 0
+
+
+def test_uscita_predefinita(tmp_path):
+    assert pa.uscita_predefinita(tmp_path / "a.mp3", False).name == "a_pulito.mp3"
+    assert pa.uscita_predefinita(tmp_path / "a.webm", True).name == "a_pulito.webm"
+    assert pa.uscita_predefinita(tmp_path / "a.avi", True).name == "a_pulito.mkv"
+    assert pa.uscita_predefinita(tmp_path / "a.wma", False).name == "a_pulito.m4a"
+
+
+def test_spazio_necessario():
+    assert pa.spazio_necessario(3600) == pytest.approx(1.38e9, rel=0.01)
+
+
+@ffmpeg
+def test_spazio_insufficiente(tmp_path, monkeypatch):
+    src = tmp_path / "a.wav"
+    _sinusoide(src, 2)
+    monkeypatch.setattr(pa.shutil, "disk_usage", lambda _p: type("U", (), {"free": 1000})())
+    res = CliRunner().invoke(main, ["pulisci-audio", str(src)])
+    assert res.exit_code != 0 and "Spazio insufficiente" in res.output
+
+
+@ffmpeg
+def test_ingresso_avi_ha_uscita_valida(tmp_path):
+    src = tmp_path / "v.avi"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=2",
+                    "-f", "lavfi", "-i", "sine=d=2", "-shortest", "-c:v", "mpeg4", "-c:a", "mp3", str(src)],
+                   check=True)
+    res = CliRunner().invoke(main, ["pulisci-audio", str(src)])
+    assert res.exit_code == 0, res.output
+    assert pa.ha_video(tmp_path / "v_pulito.mkv")

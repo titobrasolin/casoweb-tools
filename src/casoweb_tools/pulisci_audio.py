@@ -81,6 +81,7 @@ _CODEC = {
     ".flac": ["-c:a", "flac"],
     ".opus": ["-c:a", "libopus", "-b:a", "128k"],
     ".ogg": ["-c:a", "libvorbis", "-q:a", "5"],
+    ".webm": ["-c:a", "libopus", "-b:a", "128k"],
 }
 
 
@@ -163,6 +164,26 @@ def ha_video(path: Path) -> bool:
     return "video" in out
 
 
+def uscita_predefinita(ingresso: Path, video: bool) -> Path:
+    """<nome>_pulito con la stessa estensione dell'ingresso; se non la gestiamo (avi, ts, wma...), .mkv o .m4a."""
+    suffisso = ingresso.suffix if ingresso.suffix.lower() in _CODEC else (".mkv" if video else ".m4a")
+    return ingresso.with_name(f"{ingresso.stem}_pulito{suffisso}")
+
+
+def durata(path: Path) -> float:
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+                         capture_output=True, text=True).stdout.strip()
+    try:
+        return float(out)
+    except ValueError:
+        return 0.0
+
+
+def spazio_necessario(secondi: float) -> int:
+    """Byte dei file temporanei: originale stereo 48 kHz a 16 bit + due versioni mono (circa 0,38 MB al secondo)."""
+    return int(secondi * SR * 2 * (2 + 1 + 1))
+
+
 def elenca_profili() -> None:
     for nome, p in PROFILI.items():
         print(f"{nome:10s} {p['desc']}")
@@ -193,20 +214,27 @@ def run(ingresso: Path, *, uscita: Path | None, profilo: str, motore: str, segme
             raise SystemExit(f"Nessun tratto 'parlato' in {segmenti.name}.")
 
     video = ha_video(ingresso)
-    uscita = uscita or ingresso.with_name(f"{ingresso.stem}_pulito{ingresso.suffix}")
+    uscita = uscita or uscita_predefinita(ingresso, video)
     codec = _CODEC.get(uscita.suffix.lower())
     if codec is None:
         raise SystemExit(f"Formato di uscita non gestito: {uscita.suffix} ({', '.join(_CODEC)})")
     uscita.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp = Path(tempfile.mkdtemp(prefix="casoweb_pulisci_"))
+    necessario = spazio_necessario(durata(ingresso))
+    libero = shutil.disk_usage(uscita.parent).free
+    if necessario > 0.9 * libero:
+        raise SystemExit(f"Spazio insufficiente in {uscita.parent}: servono circa {necessario / 1e9:.1f} GB per i file "
+                         f"temporanei, ne restano {libero / 1e9:.1f}. Scegli con -o una cartella su un disco più capiente.")
+    if necessario > 1e9:
+        logger.info(f"File temporanei: circa {necessario / 1e9:.1f} GB (accanto all'uscita, cancellati a fine lavoro).")
+    tmp = Path(tempfile.mkdtemp(prefix="casoweb_pulisci_", dir=uscita.parent))
     try:
         # 1) audio originale a 48 kHz (stereo) e sua versione mono per il motore
         orig = tmp / "originale.wav"
         mono = tmp / "mono.wav"
         logger.info("Estraggo l'audio...")
-        esegui(["ffmpeg", "-y", "-v", "error", "-i", str(ingresso), "-vn", "-ar", str(SR), "-c:a", "pcm_s16le",
-                str(orig)])
+        esegui(["ffmpeg", "-y", "-v", "error", "-i", str(ingresso), "-vn", "-ar", str(SR), "-ac", "2",
+                "-c:a", "pcm_s16le", str(orig)])
         esegui(["ffmpeg", "-y", "-v", "error", "-i", str(orig), "-ac", "1", str(mono)])
 
         # 2) parlato ripulito dal motore
@@ -274,5 +302,7 @@ def _grafo(p: dict, con_segmenti: bool, intervalli, dissolvenza: float, volume_f
     return (
         f"[0:a]{p['musica']},volume='1-({g})':eval=frame[o];"
         f"[1:a]{pannello},volume='{g}':eval=frame[c];"
-        f"[o][c]amix=inputs=2:duration=first:normalize=0{fin}[out]"
+        # amix divide ogni ingresso per il loro numero (qui 2): volume=2 lo compensa. Si evita
+        # l'opzione normalize=0, che ffmpeg < 4.4 (es. Ubuntu 20.04) non conosce.
+        f"[o][c]amix=inputs=2:duration=first:dropout_transition=0,volume=2{fin}[out]"
     )
