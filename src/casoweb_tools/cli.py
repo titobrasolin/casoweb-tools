@@ -11,6 +11,7 @@ from casoweb_tools import __version__, log
 from casoweb_tools.cmds.separa_parlato import separa_parlato
 from casoweb_tools.cmds.video_da_audio import video_da_audio
 from casoweb_tools.cmds.video_per_canon import video_per_canon
+from casoweb_tools.cmds.video_per_social import video_per_social
 
 logger = logging.getLogger(__name__)
 log.configura()
@@ -31,6 +32,7 @@ def main() -> None:
 main.add_command(separa_parlato)
 main.add_command(video_da_audio)
 main.add_command(video_per_canon)
+main.add_command(video_per_social)
 
 
 def avvia() -> None:

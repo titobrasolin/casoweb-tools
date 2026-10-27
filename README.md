@@ -123,6 +123,7 @@ Con `-v WARNING` restano solo avvisi ed errori.
 | `casoweb separa-parlato` | Separa parlato e musica in una registrazione (trasmissione radio, podcast, conferenza...), produce l'audio col solo parlato e quello con la musica silenziata, e i rispettivi sottotitoli `.srt` (faster-whisper, GPU se disponibile). | [Dall'intervista radio ai sottotitoli, senza la musica](https://www.casoweb.eu/?view=article&id=307&catid=90) |
 | `casoweb video-da-audio` | Trasforma un audio con i suoi sottotitoli in video con sfondo fisso, in più profili: YouTube, web, WhatsApp (sotto i 16 MB per mezz'ora), quadrato e verticale. | idem |
 | `casoweb video-per-canon` | Converte un video qualsiasi nella coppia `MVI_NNNN.AVI` + `.THM` che una vecchia Canon PowerShot riproduce sul proprio display (provato sulla A2000 IS in tutte e quattro le modalità video: Compact 160x120 e Standard 320x240, 640x480 e 640x480 LP). Richiede ffmpeg; Pillow si installa con il pacchetto. | in preparazione |
+| `casoweb video-per-social` | Da una ripresa amatoriale a una clip per il sito e i social: taglio e ritaglio fissi (9:16, 4:5 o 16:9), bianco e nero ad alto contrasto con grana e vignettatura, sottotitoli dall'SRT battuti a macchina una lettera alla volta, titolo d'apertura e nomi nel momento in cui vengono pronunciati. Richiede ffmpeg con libass. | in preparazione |
 
 Flusso tipico:
 
@@ -132,7 +133,7 @@ casoweb separa-parlato registrazione.webm --nomi "Mario Rossi, Anna Bianchi"
 casoweb video-da-audio registrazione_output/registrazione_parlato.mp3 --immagine locandina.jpg
 ```
 
-Dettagli in [docs/separa-parlato.md](docs/separa-parlato.md) e [docs/video-per-canon.md](docs/video-per-canon.md).
+Dettagli in [docs/separa-parlato.md](docs/separa-parlato.md), [docs/video-per-canon.md](docs/video-per-canon.md) e [docs/video-per-social.md](docs/video-per-social.md).
 
 ---
 
@@ -148,7 +149,8 @@ casoweb-tools/
 │       ├── separa_parlato.py   # logica, importata solo quando serve
 │       ├── video_da_audio.py
 │       ├── canon_avi.py        # contenitore AVI nello stile Canon PowerShot
-│       └── video_per_canon.py
+│       ├── video_per_canon.py
+│       └── video_per_social.py # bianco e nero e testi battuti a macchina
 ├── tests/
 ├── docs/             # note sugli esperimenti e bozze per gli articoli
 ├── scripts/          # script e file di supporto non Python
