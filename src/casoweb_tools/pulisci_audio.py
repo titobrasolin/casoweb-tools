@@ -109,12 +109,28 @@ def leggi_intervalli(tsv: Path) -> list[tuple[float, float]]:
         if not riga.strip() or riga.startswith("#") or riga.startswith("inizio_s"):
             continue
         col = riga.split("\t")
-        out.append((float(col[0].replace(",", ".")), float(col[1].replace(",", "."))))
-    return sorted(out)
+        try:
+            a, b = float(col[0].replace(",", ".")), float(col[1].replace(",", "."))
+        except (ValueError, IndexError):
+            raise SystemExit(f"{tsv.name}: riga non valida (servono inizio e fine in secondi, separati da tabulazione): {riga!r}")
+        out.append((a, b))
+    return unisci(out)
+
+
+def unisci(intervalli: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Ordina e fonde gli intervalli sovrapposti (es. applausi e risate rilevati insieme); scarta quelli vuoti."""
+    out: list[list[float]] = []
+    for a, b in sorted(i for i in intervalli if i[1] > i[0]):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]
 
 
 def sottrai(intervalli: list[tuple[float, float]], esclusi: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Gli `intervalli` privati dei tratti `esclusi` (entrambi ordinati, ciascuno senza sovrapposizioni)."""
+    """Gli `intervalli` privati dei tratti `esclusi`."""
+    intervalli, esclusi = unisci(intervalli), unisci(esclusi)
     out = []
     for a, b in intervalli:
         inizio = a

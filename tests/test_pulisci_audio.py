@@ -158,3 +158,16 @@ def test_pulizia_con_escludi(tmp_path):
     ap.write_text("inizio_s\tfine_s\tetichetta\n1.200\t1.800\tApplause\n", encoding="utf-8")
     res = CliRunner().invoke(main, ["pulisci-audio", str(src), "--segmenti", str(tsv), "--escludi", str(ap)])
     assert res.exit_code == 0, res.output
+
+
+def test_sottrai_con_esclusi_disordinati_o_sovrapposti():
+    assert pa.sottrai([(0, 10)], [(8, 12), (-1, 1), (3, 4), (3.5, 5)]) == [(1, 3), (5, 8)]
+
+
+def test_leggi_intervalli_fonde_e_segnala_righe_errate(tmp_path):
+    f = tmp_path / "a.tsv"
+    f.write_text("inizio_s\tfine_s\n5\t7\n1\t3\n2\t4\n", encoding="utf-8")
+    assert pa.leggi_intervalli(f) == [(1, 4), (5, 7)]
+    f.write_text("abc\tdef\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        pa.leggi_intervalli(f)
