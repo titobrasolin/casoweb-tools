@@ -31,6 +31,13 @@ I tempi dell'SRT, di `--nomi` e dell'audio ripulito sono quelli della
 ripresa intera: è `video-per-social` a spostarli di `--inizio`. Per questo
 conviene `separa-parlato --modo silenzia`, che non taglia nulla.
 
+**Audio saturato.** Nella ripresa di partenza (telefono in platea, circa
+−8 LUFS, picchi oltre 0 dBFS) `separa-parlato` ha prodotto un SRT vuoto: il
+filtro VAD di faster-whisper non riconosceva come voce nessun tratto. Senza
+VAD e con l'ingresso abbassato di 8 dB Whisper trascriveva, ma a frammenti
+e con nomi poco credibili. Con riprese così l'SRT va controllato parola per
+parola, e i nomi vanno scritti a mano.
+
 ## Scegliere il ritaglio
 
 Il ritaglio è fisso, per scelta: se chi parla sta fermo, un'inquadratura
