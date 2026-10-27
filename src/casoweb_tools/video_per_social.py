@@ -193,6 +193,17 @@ def spezza(a: float, b: float, righe: list[str], max_righe: int) -> list[tuple[f
     return out
 
 
+def raggruppa_nomi(nomi: list[tuple[float, str]], distanza: float) -> list[list[tuple[float, str]]]:
+    """Nomi in gruppi: uno nuovo comincia quando passano almeno `distanza` secondi dal nome precedente."""
+    gruppi: list[list[tuple[float, str]]] = []
+    for t, testo in sorted(nomi):
+        if gruppi and t - gruppi[-1][-1][0] < distanza:
+            gruppi[-1].append((t, testo))
+        else:
+            gruppi.append([(t, testo)])
+    return gruppi
+
+
 def ts_ass(t: float) -> str:
     cs = int(round(max(t, 0.0) * 100))
     h, cs = divmod(cs, 360_000)
@@ -207,11 +218,12 @@ def _sicuro(testo: str) -> str:
 
 
 def battuta(a: float, b: float, righe: list[str], stile: str, velocita: float,
-            frazione: float = 0.6) -> list[str]:
+            frazione: float = 0.6, margine_v: int = 0) -> list[str]:
     """Righe Dialogue che "battono" il testo una lettera alla volta tra a e b.
 
     Il testo è sempre intero, quello non ancora battuto è trasparente: l'impaginazione non si muove.
     La battitura dura al massimo `frazione` della durata, così il testo resta leggibile per intero.
+    `margine_v` sostituisce il margine verticale dello stile (0 = quello dello stile).
     """
     unita = []  # caratteri visibili; "\N" (a capo) conta come uno
     for i, r in enumerate(righe):
@@ -232,7 +244,7 @@ def battuta(a: float, b: float, righe: list[str], stile: str, velocita: float,
         visibile = "".join(unita[:i])
         resto = "".join(unita[i:])
         testo = visibile + (r"{\alpha&HFF&}" + resto if resto else "")
-        out.append(f"Dialogue: 0,{ts_ass(t0)},{ts_ass(t1)},{stile},,0,0,0,,{testo}")
+        out.append(f"Dialogue: 0,{ts_ass(t0)},{ts_ass(t1)},{stile},,0,0,{margine_v},,{testo}")
         cs_prec = ts_ass(t0)
     # ogni evento finisce dove inizia il successivo
     for j in range(len(out) - 1):
@@ -242,13 +254,17 @@ def battuta(a: float, b: float, righe: list[str], stile: str, velocita: float,
     return out
 
 
+def _spessore_carta(px: float) -> float:
+    return px * 0.18
+
+
 def stili_ass(w: int, h: int, o: Opzioni) -> list[str]:
     px = max(12.0, w * o.dimensione_font / 100)
     margine_basso = h * FORMATI[o.formato][3] / 100
     lato = w * 0.06
     if o.stile_testo == "carta":
         # testo quasi nero su una striscia color carta (BorderStyle 3: riquadro al posto del contorno)
-        colori, bordo, spessore = "&H00141414,&H00141414,&H00DCE4E8,&H00000000", 3, px * 0.18
+        colori, bordo, spessore = "&H00141414,&H00141414,&H00DCE4E8,&H00000000", 3, _spessore_carta(px)
     else:
         colori, bordo, spessore = "&H00F0F0F0,&H00F0F0F0,&H00000000,&H00000000", 1, max(1.5, px / 14)
 
@@ -272,19 +288,25 @@ def costruisci_ass(w: int, h: int, o: Opzioni, sottotitoli: list[tuple[float, fl
     for a, b, testo in sottotitoli:
         for ga, gb, righe in spezza(a, b, a_capo(testo, car), 2):
             eventi += battuta(ga, gb, righe, "Sottotitoli", o.velocita)
-    fine_titolo = 0.0
-    if o.titolo:
-        fine_titolo = min(o.durata_titolo, durata)
-        righe = [r for t in o.titolo for r in a_capo(t, int(car / 1.1))]
-        eventi += battuta(0.0, fine_titolo, righe, "Titolo", o.velocita)
-    for i, (t, testo) in enumerate(nomi):
-        t = max(t, fine_titolo)
-        fine = min(t + o.durata_nome, durata, nomi[i + 1][0] if i + 1 < len(nomi) else durata)
-        if fine - t > 0.2:
-            eventi += battuta(t, fine, a_capo(testo, int(car / 1.1)), "Nome", o.velocita)
-        else:
-            logger.warning(f"il nome {testo!r} non trova spazio (titolo ancora in corso o nome successivo "
-                           f"troppo vicino): omesso.")
+    # titolo e nomi in alto a sinistra; i nomi sotto il titolo, così compaiono quando vengono detti
+    # anche se il titolo è ancora sullo schermo
+    dim = px * 1.1
+    interlinea = dim * 1.2 + 2 * _spessore_carta(dim) + 2  # le strisce "carta" di due righe non si toccano
+    righe_titolo = [r for t in o.titolo for r in a_capo(t, int(car / 1.1))]
+    if righe_titolo:
+        eventi += battuta(0.0, min(o.durata_titolo, durata), righe_titolo, "Titolo", o.velocita)
+    base = h * 0.05 + (len(righe_titolo) * interlinea + dim * 0.6 if righe_titolo else 0)
+    for gruppo in raggruppa_nomi(nomi, o.durata_nome):
+        # nomi ravvicinati si impilano come titoli di coda e restano fino a durata_nome dopo l'ultimo
+        fine = min(gruppo[-1][0] + o.durata_nome, durata)
+        riga = 0
+        for t, testo in gruppo:
+            righe = a_capo(testo, int(car / 1.1))
+            if fine - t > 0.2:
+                eventi += battuta(t, fine, righe, "Nome", o.velocita, margine_v=round(base + riga * interlinea))
+            else:
+                logger.warning(f"il nome {testo!r} cade a fine clip: omesso.")
+            riga += len(righe)
     intestazione = [
         "[Script Info]", "; casoweb video-per-social", "ScriptType: v4.00+",
         f"PlayResX: {w}", f"PlayResY: {h}", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",

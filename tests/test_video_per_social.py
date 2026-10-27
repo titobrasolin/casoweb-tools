@@ -110,22 +110,32 @@ def test_battuta_neutralizza_i_comandi_ass():
     assert _senza_tag(eventi[-1][2]) == "(/b1)ciao/N"
 
 
+def test_raggruppa_nomi():
+    gruppi = vs.raggruppa_nomi([(10.0, "C"), (1.0, "A"), (3.0, "B")], 4.0)
+    assert gruppi == [[(1.0, "A"), (3.0, "B")], [(10.0, "C")]]
+
+
 def test_costruisci_ass_titolo_e_nomi():
-    o = vs.Opzioni(titolo=["PROVING GROUNDS"], durata_titolo=2.0)
-    ass = vs.costruisci_ass(720, 1280, o, [(1.0, 3.0, "ciao")], [(1.0, "Mario Rossi"), (6.0, "Anna")], 8.0)
+    o = vs.Opzioni(titolo=["PROVING GROUNDS"], durata_titolo=2.0, durata_nome=3.0)
+    ass = vs.costruisci_ass(720, 1280, o, [(1.0, 3.0, "ciao")],
+                            [(1.0, "Mario Rossi"), (2.0, "Anna Bianchi"), (7.0, "Luca")], 9.0)
     assert "PlayResX: 720" in ass and "PlayResY: 1280" in ass
     stili = {r.split(",")[0]: r.split(",") for r in ass.splitlines() if r.startswith("Style:")}
     assert stili["Style: Sottotitoli"][-2] == "179"  # 14% di 1280, sopra i comandi delle storie
-    dialoghi = [r for r in ass.splitlines() if r.startswith("Dialogue:")]
-    # il nome detto durante il titolo aspetta che il titolo finisca
-    primo_nome = next(r for r in dialoghi if ",Nome," in r)
-    assert primo_nome.split(",")[1] == "0:00:02.00"
-    assert any(_senza_tag(r.split(",", 9)[9]) == "Anna" for r in dialoghi)
+    dialoghi = [r.split(",", 9) for r in ass.splitlines() if r.startswith("Dialogue:")]
+    nomi = {_senza_tag(d[9]): d for d in dialoghi if d[3] == "Nome" and "{" not in d[9]}
+    # il nome compare quando viene detto, anche durante il titolo, ma sotto di esso
+    mario = next(d for d in dialoghi if d[3] == "Nome")
+    assert mario[1] == "0:00:01.00" and int(mario[7]) > 64
+    # nomi ravvicinati: impilati, e restano insieme fino a 3 s dopo l'ultimo
+    assert int(nomi["Anna Bianchi"][7]) > int(nomi["Mario Rossi"][7])
+    assert nomi["Mario Rossi"][2] == nomi["Anna Bianchi"][2] == "0:00:05.00"
+    # gruppo nuovo: di nuovo in cima
+    assert nomi["Luca"][7] == nomi["Mario Rossi"][7]
 
 
-def test_nome_senza_spazio_avvisa(caplog):
-    o = vs.Opzioni(titolo=["TITOLO"], durata_titolo=5.0)
-    ass = vs.costruisci_ass(720, 1280, o, [], [(1.0, "Mario Rossi")], 4.0)
+def test_nome_a_fine_clip_avvisa(caplog):
+    ass = vs.costruisci_ass(720, 1280, vs.Opzioni(), [], [(3.9, "Mario Rossi")], 4.0)
     assert "Mario Rossi" not in ass
     assert "Mario Rossi" in caplog.text and "omesso" in caplog.text
 

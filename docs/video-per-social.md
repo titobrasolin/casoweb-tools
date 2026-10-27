@@ -121,9 +121,14 @@ il riquadro prende la trasparenza dei caratteri.
 - **Titolo** (`--titolo`, una riga per opzione): in alto a sinistra, come
   la didascalia di una mostra, per `--durata-titolo` secondi.
 - **Nomi** (`--nomi`): un file con una riga `tempo<TAB>testo` per nome. Il
-  nome si batte nello stesso punto del titolo quando viene pronunciato e
-  resta fino al nome successivo, o per `--durata-nome` secondi. Se arriva
-  mentre c'è ancora il titolo, aspetta che finisca.
+  nome si batte in alto a sinistra, sotto il titolo, nel momento in cui
+  viene pronunciato, anche se il titolo è ancora sullo schermo. I nomi
+  ravvicinati (meno di `--durata-nome` secondi l'uno dall'altro) si
+  impilano come titoli di coda e restano insieme fino a `--durata-nome`
+  secondi dopo l'ultimo; il gruppo successivo riparte dalla prima riga.
+  Titolo e nomi vanno tenuti brevi: nella clip di partenza, con un titolo
+  di cinque righe, i nomi scendevano sul viso di chi parlava; con due
+  righe di titolo tre nomi stanno sopra la testa.
 - Graffe e barre rovesciate nel testo diventano parentesi e barre normali:
   un SRT non può inserire comandi ASS.
 
