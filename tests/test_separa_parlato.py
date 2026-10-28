@@ -143,6 +143,8 @@ def test_srt_da_cache(tmp_path, senza_modelli):
 def test_dipendenze_mancanti_messaggio_chiaro(tmp_path, monkeypatch):
     import importlib.util
 
+    # su un PC senza AVX il controllo del processore scatterebbe prima di quello delle dipendenze
+    monkeypatch.setenv("CASOWEB_IGNORA_CPU", "1")
     vera = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec",
                         lambda name, *a: None if name == "faster_whisper" else vera(name, *a))
