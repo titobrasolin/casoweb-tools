@@ -14,12 +14,12 @@ bassi, e al confine c'è una dissolvenza incrociata (`--dissolvenza`, 0,4 s).
 ## Uso
 
 ```bash
-# 1) etichetta parlato e musica (produce <nome>_segmenti.tsv, correggibile a mano)
+# 1) etichetta parlato e musica (produce <nome>_output/<nome>_segmenti.tsv, correggibile a mano)
 casoweb separa-parlato serata.mp4 --solo-segmenti
 
 # 2) pulisci
-casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv
-casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv --motore deepfilternet --volume-finale
+casoweb pulisci-audio serata.mp4 --segmenti serata_output/serata_segmenti.tsv
+casoweb pulisci-audio serata.mp4 --segmenti serata_output/serata_segmenti.tsv --motore deepfilternet --volume-finale
 ```
 
 Se l'ingresso ha un video, viene copiato senza ricodificarlo e si sostituisce

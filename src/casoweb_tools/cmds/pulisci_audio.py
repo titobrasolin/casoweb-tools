@@ -20,7 +20,7 @@ def _elenca(ctx: click.Context, _param, value: bool) -> None:
     epilog="""\b
 Esempi:
   casoweb pulisci-audio serata.mp4
-  casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv --motore deepfilternet
+  casoweb pulisci-audio serata.mp4 --segmenti serata_output/serata_segmenti.tsv --motore deepfilternet
   casoweb pulisci-audio serata.wav --profilo forte --volume-finale
   casoweb pulisci-audio --elenca-profili""",
 )
