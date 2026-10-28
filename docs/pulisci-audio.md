@@ -34,7 +34,7 @@ nell'originale.
 
 ```bash
 casoweb rileva-suoni serata.mp4
-casoweb pulisci-audio serata.mp4 --segmenti serata_segmenti.tsv --escludi serata_suoni.tsv
+casoweb pulisci-audio serata.mp4 --segmenti serata_output/serata_segmenti.tsv --escludi serata_suoni.tsv
 ```
 
 ## Profili (`--profilo`)
