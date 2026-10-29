@@ -20,7 +20,7 @@ casoweb rileva-suoni --elenca-classi
 uv tool install --force 'casoweb-tools[rileva-suoni] @ git+https://github.com/titobrasolin/casoweb-tools.git'
 ```
 
-L'extra porta `ai-edge-litert` (~20 MB) e numpy: niente TensorFlow (1,5-2 GB). Se
+L'extra porta `ai-edge-litert` (circa 58 MB una volta installato) e numpy: niente TensorFlow (1,5-2 GB). Se
 TensorFlow è già installato va bene anche quello. Il modello (`yamnet.tflite`,
 pochi MB) si scarica da solo la prima volta in `~/.cache/casoweb`; con `--modello`
 se ne indica uno già scaricato.
