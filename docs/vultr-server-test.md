@@ -10,6 +10,12 @@ Questa guida attiva un server Ubuntu temporaneo su Vultr che:
 
 ## Piano consigliato
 
+> ℹ️ Nomi dei piani, prezzi e condizioni di fatturazione di Vultr citati in
+> questa guida sono quelli **al 30 ottobre 2026** e possono cambiare:
+> prima di creare un'istanza conviene verificarli sulla
+> [pagina dei prezzi](https://www.vultr.com/pricing/) o con
+> `vultr-cli plans list`.
+
 | Voce         | Valore                                          |
 |--------------|-------------------------------------------------|
 | Piano        | `vhf-1c-2gb` (High Frequency, 1 vCPU, 2 GB RAM) |
