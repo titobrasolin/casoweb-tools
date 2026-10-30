@@ -155,3 +155,50 @@ def test_dipendenze_mancanti_messaggio_chiaro(tmp_path, monkeypatch):
     assert "faster_whisper" in res.output
     # i test girano in un'installazione editabile: il suggerimento è per l'ambiente di sviluppo
     assert "uv pip install" in res.output and "[dev,separa-parlato" in res.output
+
+
+def test_blocchi():
+    assert ir.blocchi(None, 600) == [(0.0, None)]  # durata ignota: tutto insieme
+    assert ir.blocchi(500, 600) == [(0.0, None)]
+    assert ir.blocchi(3600, 0) == [(0.0, None)]  # 0 = nessuna divisione
+    assert ir.blocchi(620, 600) == [(0.0, None)]  # avanzo troppo corto per un blocco a sé
+    assert ir.blocchi(1500, 600) == [(0.0, 600.0), (600.0, 1200.0), (1200.0, None)]
+    assert ir.blocchi(1200, 600) == [(0.0, 600.0), (600.0, None)]
+    assert ir.blocchi(1210, 600) == [(0.0, 600.0), (600.0, None)]  # i 10 s finali vanno nell'ultimo
+
+
+def test_segment_audio_a_blocchi(tmp_path, monkeypatch):
+    """Un Segmenter finto: una chiamata per blocco, segmenti uguali ai confini riuniti."""
+    import sys
+    import types
+
+    chiamate = []
+
+    class Segmenter:
+        def __init__(self, **kw):
+            pass
+
+        def __call__(self, path, start_sec=None, stop_sec=None):
+            chiamate.append((start_sec, stop_sec))
+            s = start_sec or 0.0
+            e = stop_sec or 1500.0
+            # tempi assoluti, come inaSpeechSegmenter
+            return [("speech", s, e)] if s < 600 else [("speech", s, s + 100), ("music", s + 100, e)]
+
+    monkeypatch.setitem(sys.modules, "inaSpeechSegmenter", types.SimpleNamespace(Segmenter=Segmenter))
+    monkeypatch.setattr(ir, "durata", lambda p: 1500.0)
+
+    raw = ir.segment_audio(tmp_path / "x.aac", blocco=600)
+    assert chiamate == [(None, 600.0), (600.0, 1200.0), (1200.0, None)]
+    assert raw == [("speech", 0.0, 700.0), ("music", 700.0, 1200.0),
+                   ("speech", 1200.0, 1300.0), ("music", 1300.0, 1500.0)]
+
+
+@needs_ffmpeg
+def test_durata_esatta_anche_per_aac_senza_indice(tmp_path):
+    """Per l'AAC ADTS ffprobe stima la durata dal bitrate; qui serve quella vera."""
+    f = tmp_path / "x.aac"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anoisesrc=d=95:c=pink",
+                    "-c:a", "aac", "-b:a", "64k", "-f", "adts", str(f)], check=True)
+    assert ir.durata(f) == pytest.approx(95.0, abs=0.1)
+    assert ir.durata(tmp_path / "manca.aac") is None
