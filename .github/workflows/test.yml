@@ -14,7 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Le modifiche alla sola documentazione non toccano i test: se la PR (o il push) cambia
+  # soltanto docs/, file .md o LICENSE, la matrice si salta. Nel dubbio (base sconosciuta,
+  # errore di git) i test partono comunque.
+  modifiche:
+    runs-on: ubuntu-latest
+    outputs:
+      codice: ${{ steps.diff.outputs.codice }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: File di codice cambiati?
+        id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          codice=true
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ] \
+             && cambiati=$(git diff --name-only "$BASE" HEAD); then
+            echo "File cambiati:"; echo "$cambiati"
+            if ! echo "$cambiati" | grep -q -v -E '^docs/|\.md$|^LICENSE$'; then
+              codice=false
+            fi
+          fi
+          echo "codice=$codice" | tee -a "$GITHUB_OUTPUT"
+
   pytest:
+    needs: modifiche
+    if: needs.modifiche.outputs.codice == 'true'
     # I test non caricano modelli: bastano l'extra "dev" (pytest, numpy) e ffmpeg,
     # senza i ~2 GB dell'extra "separa-parlato".
     # Windows con una sola versione di Python: basta a scoprire percorsi e segnali diversi da Linux.
@@ -59,7 +88,13 @@ jobs:
   esito:
     name: test
     if: always()
-    needs: pytest
+    # "skipped" è accettato solo se è stato "modifiche" a dire che non c'è codice da provare
+    needs: [modifiche, pytest]
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.pytest.result }}" = success
+      - run: |
+          test "${{ needs.pytest.result }}" = success || {
+            test "${{ needs.modifiche.result }}" = success &&
+            test "${{ needs.modifiche.outputs.codice }}" = false &&
+            test "${{ needs.pytest.result }}" = skipped
+          }
