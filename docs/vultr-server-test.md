@@ -36,84 +36,34 @@ RAM (vedi [sezione 5](#5-estrazione-srt-con-casoweb)).
 
 ## 1. File cloud-init
 
-Salvare come `cloud-init.yaml`:
+Il file è [`scripts/vultr-cloud-init.yaml`](../scripts/vultr-cloud-init.yaml).
+Scaricarlo così com'è, con gli a capo in formato Unix (LF):
 
-```yaml
-#cloud-config
-timezone: Europe/Rome
-package_update: true
-packages:
-  - ffmpeg
-  - screen
-
-# TensorFlow e Whisper insieme stanno stretti in 2 GB: lo swap evita
-# che il kernel interrompa l'elaborazione per mancanza di memoria
-swap:
-  filename: /swapfile
-  size: 4G
-
-write_files:
-  - path: /usr/local/bin/registra-stream
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # Registra lo stream in file da 1 ora, senza ricodifica.
-      # ffmpeg si riconnette da solo; se esce comunque, si riparte dopo 10 s.
-      URL="https://rastu91li2018.radioca.st/stream"
-      DIR=/root/registrazioni
-      mkdir -p "$DIR"
-      while true; do
-        # estensione adatta al codec dello stream (con -c copy deve corrispondere)
-        codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
-                  -of csv=p=0 "$URL" 2>/dev/null)
-        case "$codec" in
-          aac) EXT=aac ;;
-          *)   EXT=mp3 ;;
-        esac
-        ffmpeg -hide_banner -loglevel warning -nostdin \
-          -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 \
-          -reconnect_delay_max 30 \
-          -i "$URL" -map 0:a -c copy \
-          -f segment -segment_time 3600 -reset_timestamps 1 -strftime 1 \
-          "$DIR/radio_%Y%m%d_%H%M%S.$EXT"
-        echo "$(date '+%F %T') ffmpeg uscito ($?), riparto tra 10 s"
-        sleep 10
-      done
-
-  - path: /usr/local/bin/elabora-registrazioni
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # Ricava gli SRT da ogni file orario già chiuso che non li ha ancora.
-      # Variabili: MODELLO (default small), ATTESA tra un giro e l'altro (s).
-      DIR=/root/registrazioni
-      MODELLO="${MODELLO:-small}"
-      ATTESA="${ATTESA:-300}"
-      while true; do
-        # -mmin +2: il file in scrittura cambia di continuo e resta escluso
-        find "$DIR" -maxdepth 1 -type f \
-             \( -name 'radio_*.mp3' -o -name 'radio_*.aac' \) -mmin +2 | sort |
-        while read -r f; do
-          nome=$(basename "${f%.*}")
-          [ -e "$DIR/${nome}_output/${nome}_silenziato.srt" ] && continue
-          echo "$(date '+%F %T') elaboro $f"
-          casoweb separa-parlato "$f" --no-audio --modello "$MODELLO" < /dev/null \
-            || echo "$(date '+%F %T') errore su $f"
-        done
-        sleep "$ATTESA"
-      done
-
-runcmd:
-  - [ bash, -c, "curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh" ]
-  - - bash
-    - -c
-    - >-
-      env HOME=/root UV_TOOL_BIN_DIR=/usr/local/bin
-      uv tool install --python 3.12
-      --overrides https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt
-      "casoweb-tools[separa-parlato,cpu] @ git+https://github.com/titobrasolin/casoweb-tools.git"
-  - [ screen, -dmS, radio, /usr/local/bin/registra-stream ]
+```bash
+curl -LsSf -o cloud-init.yaml \
+  https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/vultr-cloud-init.yaml
 ```
+
+Su Windows lo stesso comando funziona in PowerShell scrivendo `curl.exe`
+(senza `.exe` PowerShell userebbe il suo alias, che si comporta in un altro
+modo) e mettendo tutto su una riga.
+
+> ⚠️ **Non copiare e incollare il file in Blocco note o in un editor Windows
+> e non risalvarlo**: gli a capo diventerebbero CRLF e gli script che
+> cloud-init scrive sul server fallirebbero (`$'\r': command not found`).
+> Per modificarlo, usare un editor che conservi LF (in VS Code: indicatore
+> `LF` in basso a destra).
+
+Cosa fa:
+
+- installa `ffmpeg` e `screen`, imposta il fuso orario e aggiunge 4 GB di
+  swap: TensorFlow e Whisper insieme stanno stretti in 2 GB;
+- scrive `/usr/local/bin/registra-stream`, che registra lo stream in file da
+  un'ora senza ricodifica, sceglie `.mp3` o `.aac` in base al codec e riparte
+  da solo se ffmpeg si ferma;
+- scrive `/usr/local/bin/elabora-registrazioni` (vedi sezione 5);
+- installa `uv` e `casoweb` con l'extra `separa-parlato`;
+- avvia la registrazione nella sessione `screen` chiamata `radio`.
 
 Note:
 
@@ -151,6 +101,23 @@ Su Linux e macOS ci sono i pacchetti (`brew install vultr/vultr-cli/vultr-cli`,
 opzioni, Chocolatey e Docker compresi, sono nel
 [README ufficiale](https://github.com/vultr/vultr-cli#installation).
 
+### Caricare la chiave SSH
+
+Se `vultr-cli ssh-key list` non mostra nessuna chiave, crearne una (se non
+c'è già `~/.ssh/id_ed25519.pub`) e caricarla; l'ID restituito va in
+`--ssh-keys`:
+
+```bash
+ssh-keygen -t ed25519 -C "casoweb-test"
+vultr-cli ssh-key create --name mio-pc --key "$(cat ~/.ssh/id_ed25519.pub)"
+```
+
+In PowerShell l'ultima riga diventa:
+
+```powershell
+vultr-cli ssh-key create --name mio-pc --key (Get-Content $HOME\.ssh\id_ed25519.pub)
+```
+
 ### Creare l'istanza
 
 ```bash
@@ -166,7 +133,14 @@ vultr-cli instance create \
   --userdata "$(cat cloud-init.yaml)"
 ```
 
-In PowerShell cambiano solo la ricerca, l'a capo e la lettura del file:
+In PowerShell cambiano la ricerca, l'a capo e la lettura del file.
+
+> ⚠️ **Serve PowerShell 7.3 o successivo** (`$PSVersionTable.PSVersion`).
+> Windows PowerShell 5.1, quello preinstallato, elimina le virgolette doppie
+> dagli argomenti passati a un programma esterno: `cloud-init.yaml` ne
+> contiene molte e arriverebbe al server rovinato, senza alcun errore al
+> momento della creazione. Con la 5.1 conviene usare il pannello web
+> (User data), oppure lanciare la versione bash da Git Bash o WSL.
 
 ```powershell
 vultr-cli os list | Select-String ubuntu

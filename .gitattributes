@@ -1,0 +1,4 @@
+# cloud-init e script di shell finiscono su Linux: sempre LF, anche da un checkout Windows
+*.sh   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
