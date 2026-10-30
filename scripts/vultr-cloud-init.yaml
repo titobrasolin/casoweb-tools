@@ -1,0 +1,76 @@
+#cloud-config
+# Server di test usa e getta su Vultr: istruzioni in docs/vultr-server-test.md.
+# Va salvato con a capo Unix (LF): con CRLF gli script scritti sul server non partono.
+timezone: Europe/Rome
+package_update: true
+packages:
+  - ffmpeg
+  - screen
+
+# TensorFlow e Whisper insieme stanno stretti in 2 GB: lo swap evita
+# che il kernel interrompa l'elaborazione per mancanza di memoria
+swap:
+  filename: /swapfile
+  size: 4G
+
+write_files:
+  - path: /usr/local/bin/registra-stream
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Registra lo stream in file da 1 ora, senza ricodifica.
+      # ffmpeg si riconnette da solo; se esce comunque, si riparte dopo 10 s.
+      URL="https://rastu91li2018.radioca.st/stream"
+      DIR=/root/registrazioni
+      mkdir -p "$DIR"
+      while true; do
+        # estensione adatta al codec dello stream (con -c copy deve corrispondere)
+        codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+                  -of csv=p=0 "$URL" 2>/dev/null)
+        case "$codec" in
+          aac) EXT=aac ;;
+          *)   EXT=mp3 ;;
+        esac
+        ffmpeg -hide_banner -loglevel warning -nostdin \
+          -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 \
+          -reconnect_delay_max 30 \
+          -i "$URL" -map 0:a -c copy \
+          -f segment -segment_time 3600 -reset_timestamps 1 -strftime 1 \
+          "$DIR/radio_%Y%m%d_%H%M%S.$EXT"
+        echo "$(date '+%F %T') ffmpeg uscito ($?), riparto tra 10 s"
+        sleep 10
+      done
+
+  - path: /usr/local/bin/elabora-registrazioni
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Ricava gli SRT da ogni file orario già chiuso che non li ha ancora.
+      # Variabili: MODELLO (default small), ATTESA tra un giro e l'altro (s).
+      DIR=/root/registrazioni
+      MODELLO="${MODELLO:-small}"
+      ATTESA="${ATTESA:-300}"
+      while true; do
+        # -mmin +2: il file in scrittura cambia di continuo e resta escluso
+        find "$DIR" -maxdepth 1 -type f \
+             \( -name 'radio_*.mp3' -o -name 'radio_*.aac' \) -mmin +2 | sort |
+        while read -r f; do
+          nome=$(basename "${f%.*}")
+          [ -e "$DIR/${nome}_output/${nome}_silenziato.srt" ] && continue
+          echo "$(date '+%F %T') elaboro $f"
+          casoweb separa-parlato "$f" --no-audio --modello "$MODELLO" < /dev/null \
+            || echo "$(date '+%F %T') errore su $f"
+        done
+        sleep "$ATTESA"
+      done
+
+runcmd:
+  - [ bash, -c, "curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh" ]
+  - - bash
+    - -c
+    - >-
+      env HOME=/root UV_TOOL_BIN_DIR=/usr/local/bin
+      uv tool install --python 3.12
+      --overrides https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/overrides-cpu.txt
+      "casoweb-tools[separa-parlato,cpu] @ git+https://github.com/titobrasolin/casoweb-tools.git"
+  - [ screen, -dmS, radio, /usr/local/bin/registra-stream ]
