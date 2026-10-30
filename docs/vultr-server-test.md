@@ -125,7 +125,27 @@ Da pannello web: *Deploy → Cloud Compute → High Frequency → 1 vCPU / 2 GB*
 caricare la chiave SSH, incollare `cloud-init.yaml` in **User data**,
 disattivare i backup automatici.
 
-Oppure con `vultr-cli`:
+Oppure con `vultr-cli`.
+
+### Installare vultr-cli
+
+Su **Windows**: scaricare l'archivio `windows_amd64` dalla pagina
+[Releases](https://github.com/vultr/vultr-cli/releases), estrarre
+`vultr-cli.exe` in una cartella presente nel `PATH` (o aggiungerla), poi
+impostare la chiave API, che si genera dal pannello Vultr in
+*Account → API*:
+
+```powershell
+setx VULTR_API_KEY "la-mia-chiave"   # vale dai terminali aperti dopo
+vultr-cli account info               # verifica
+```
+
+Su Linux e macOS ci sono i pacchetti (`brew install vultr/vultr-cli/vultr-cli`,
+`dnf install vultr-cli`, ...) e si usa `export VULTR_API_KEY=...`. Tutte le
+opzioni, Chocolatey e Docker compresi, sono nel
+[README ufficiale](https://github.com/vultr/vultr-cli#installation).
+
+### Creare l'istanza
 
 ```bash
 vultr-cli os list | grep -i ubuntu      # ID del sistema operativo
@@ -139,6 +159,22 @@ vultr-cli instance create \
   --label casoweb-test \
   --userdata "$(cat cloud-init.yaml)"
 ```
+
+In PowerShell cambiano solo la ricerca, l'a capo e la lettura del file:
+
+```powershell
+vultr-cli os list | Select-String ubuntu
+
+vultr-cli instance create `
+  --region fra `
+  --plan vhf-1c-2gb `
+  --os <OS_ID> `
+  --ssh-keys <SSH_KEY_ID> `
+  --label casoweb-test `
+  --userdata (Get-Content -Raw cloud-init.yaml)
+```
+
+`ssh` e `scp` sono già inclusi in Windows 10 e 11.
 
 Dopo un paio di minuti: `ssh root@<IP>`, poi:
 
@@ -264,7 +300,7 @@ piano regge; altrimenti:
 # dal proprio computer: solo i sottotitoli
 scp 'root@<IP>:/root/registrazioni/*_output/*.srt' .
 
-# oppure tutto (registrazioni comprese)
+# oppure tutto (registrazioni comprese; su Windows: scp -r)
 rsync -av root@<IP>:/root/registrazioni/ ./registrazioni/
 
 # distruzione dell'istanza (ferma l'addebito)
