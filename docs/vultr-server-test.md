@@ -171,13 +171,37 @@ vultr-cli instance create `
 
 `ssh` e `scp` sono già inclusi in Windows 10 e 11.
 
-Dopo un paio di minuti: `ssh root@<IP>`, poi:
+Il comando restituisce subito `STATUS pending` e `MAIN IP 0.0.0.0`: l'istanza
+è ancora in preparazione. Per seguirla servono l'`ID` restituito (o quello
+che compare in `vultr-cli instance list`):
 
 ```bash
-cloud-init status --wait     # attende la fine dell'installazione
+vultr-cli instance list                  # tutte le istanze, con ID, IP e stato
+vultr-cli instance get <INSTANCE_ID>     # dettaglio di una sola istanza
+```
+
+È pronta quando `STATUS` è `active`, `POWER STATUS` è `running` e `MAIN IP`
+mostra un indirizzo vero; di solito bastano un paio di minuti.
+
+> ℹ️ Nella risposta di `instance create` compare anche la password di root
+> generata da Vultr: non serve, perché si entra con la chiave SSH. Se finisce
+> dove non dovrebbe (una chat, un ticket), sul server la si blocca con
+> `passwd -l root`.
+
+Poi `ssh root@<IP>` e, sul server:
+
+```bash
+cloud-init status --wait     # attende la fine dell'installazione (alcuni minuti)
 casoweb --version
 swapon --show                # deve comparire /swapfile
+screen -ls                   # deve esserci la sessione "radio"
+ls -lh /root/registrazioni   # il primo file della registrazione
 ```
+
+Al primo collegamento `ssh` chiede di confermare l'impronta del server:
+rispondere `yes`. Se un'istanza nuova riprende l'IP di una vecchia, `ssh`
+rifiuta il collegamento per impronta cambiata: si toglie quella vecchia con
+`ssh-keygen -R <IP>`.
 
 Se qualcosa non va, il dettaglio è in `/var/log/cloud-init-output.log`.
 
