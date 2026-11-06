@@ -40,13 +40,28 @@ Il file è [`scripts/vultr-cloud-init.yaml`](../scripts/vultr-cloud-init.yaml).
 Scaricarlo così com'è, con gli a capo in formato Unix (LF):
 
 ```bash
-curl -LsSf -o cloud-init.yaml \
+curl -LsSfO \
   https://raw.githubusercontent.com/titobrasolin/casoweb-tools/main/scripts/vultr-cloud-init.yaml
 ```
 
 Su Windows lo stesso comando funziona in PowerShell scrivendo `curl.exe`
 (senza `.exe` PowerShell userebbe il suo alias, che si comporta in un altro
 modo) e mettendo tutto su una riga.
+
+Il file deve pesare circa 3 KB e cominciare con `#cloud-config`:
+
+```powershell
+Get-Item vultr-cloud-init.yaml | Select-Object Length
+Get-Content vultr-cloud-init.yaml -TotalCount 1
+```
+
+Se pesa centinaia di KB o comincia con `<!DOCTYPE html>`, è stata salvata la
+pagina web di GitHub (indirizzo `github.com/.../blob/...`) invece del file:
+riscaricarlo dall'indirizzo `raw.githubusercontent.com` qui sopra, o dal
+pulsante *Download raw file* di GitHub. Con la pagina web `vultr-cli` su
+Windows si ferma con "Nome del file o estensione troppo lunga" (riga di
+comando oltre i 32.767 caratteri), su Linux e macOS crea un'istanza con un
+cloud-init che non funziona.
 
 > ⚠️ **Non copiare e incollare il file in Blocco note o in un editor Windows
 > e non risalvarlo**: gli a capo diventerebbero CRLF e gli script che
@@ -78,7 +93,7 @@ Note:
 ## 2. Creazione dell'istanza
 
 Da pannello web: *Deploy → Cloud Compute → High Frequency → 1 vCPU / 2 GB*,
-caricare la chiave SSH, incollare `cloud-init.yaml` in **User data**,
+caricare la chiave SSH, incollare `vultr-cloud-init.yaml` in **User data**,
 disattivare i backup automatici.
 
 Oppure con `vultr-cli`.
@@ -130,14 +145,14 @@ vultr-cli instance create \
   --os <OS_ID> \
   --ssh-keys <SSH_KEY_ID> \
   --label casoweb-test \
-  --userdata "$(cat cloud-init.yaml)"
+  --userdata "$(cat vultr-cloud-init.yaml)"
 ```
 
 In PowerShell cambiano la ricerca, l'a capo e la lettura del file.
 
 > ⚠️ **Serve PowerShell 7.3 o successivo** (`$PSVersionTable.PSVersion`).
 > Windows PowerShell 5.1, quello preinstallato, elimina le virgolette doppie
-> dagli argomenti passati a un programma esterno: `cloud-init.yaml` ne
+> dagli argomenti passati a un programma esterno: `vultr-cloud-init.yaml` ne
 > contiene molte e arriverebbe al server rovinato, senza alcun errore al
 > momento della creazione. Con la 5.1 conviene usare il pannello web
 > (User data), oppure lanciare la versione bash da Git Bash o WSL.
@@ -151,7 +166,7 @@ vultr-cli instance create `
   --os <OS_ID> `
   --ssh-keys <SSH_KEY_ID> `
   --label casoweb-test `
-  --userdata (Get-Content -Raw cloud-init.yaml)
+  --userdata (Get-Content -Raw vultr-cloud-init.yaml)
 ```
 
 `ssh` e `scp` sono già inclusi in Windows 10 e 11.
@@ -271,7 +286,7 @@ piano regge; altrimenti:
 
 - usare un modello più leggero (`small`, `base`);
 - creare l'istanza su un piano con più vCPU e RAM (lo stesso
-  `cloud-init.yaml` va bene);
+  `vultr-cloud-init.yaml` va bene);
 - registrare soltanto su questo server ed elaborare altrove (vedi sotto).
 
 ## 6. Recupero dei risultati e chiusura
