@@ -88,6 +88,9 @@ Articolo: https://www.casoweb.eu/?view=article&id=307&catid=90""",
 @click.option("--max-durata", type=float, default=6.0, show_default=True,
               help="Durata massima di un sottotitolo, in secondi.")
 @click.option("--risegmenta", is_flag=True, help="Ignora il TSV esistente e rifà la segmentazione.")
+@click.option("--blocco-segmentazione", type=float, default=300.0, show_default=True,
+              help="Secondi analizzati alla volta nella segmentazione: tiene bassa la memoria "
+                   "sulle registrazioni lunghe (0 = tutto il file insieme).")
 @click.option("--ritrascrivi", is_flag=True, help="Ignora la trascrizione in cache.")
 @click.option("--solo-segmenti", is_flag=True,
               help="Genera solo il TSV della segmentazione, da controllare prima di proseguire.")

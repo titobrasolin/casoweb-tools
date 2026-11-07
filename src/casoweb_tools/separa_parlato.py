@@ -73,6 +73,7 @@ class Opzioni:
     max_riga: int = 42
     max_durata: float = 6.0
     risegmenta: bool = False
+    blocco_segmentazione: float = 300.0  # secondi per chiamata di inaSpeechSegmenter (0 = tutto insieme)
     ritrascrivi: bool = False
     solo_segmenti: bool = False
     no_audio: bool = False
@@ -143,7 +144,38 @@ def union(intervals):
 # --------------------------------------------------------------------------
 # 1) Segmentazione parlato / musica
 # --------------------------------------------------------------------------
-def segment_audio(path: Path) -> list[tuple[str, float, float]]:
+def durata(path: Path) -> float | None:
+    """Durata esatta in secondi, contando i campioni decodificati (pochi secondi per ora di audio).
+
+    ffprobe da solo non basta: per i flussi senza indice, come l'AAC registrato da una radio
+    in streaming, stima la durata dal bitrate e può sbagliare di parecchi secondi.
+    """
+    p = ffmpeg_decode(path, 8000, 1)
+    campioni = 0
+    while dati := p.stdout.read(1 << 20):
+        campioni += len(dati) // 2  # s16le mono
+    return campioni / 8000 if p.wait() == 0 and campioni else None
+
+
+MIN_ULTIMO_BLOCCO = 30.0  # un avanzo più corto si aggiunge al blocco precedente
+
+
+def blocchi(totale: float | None, blocco: float) -> list[tuple[float, float | None]]:
+    """Intervalli (inizio, fine) in cui dividere la segmentazione; l'ultimo arriva in fondo (fine None).
+
+    inaSpeechSegmenter tiene in memoria le caratteristiche dell'intero tratto che analizza:
+    mezz'ora di audio supera già i 3 GB, mentre a blocchi di 5 minuti resta sotto 1,3 GB
+    e non dipende dalla durata della registrazione.
+    """
+    if not blocco or blocco <= 0 or totale is None or totale <= blocco + MIN_ULTIMO_BLOCCO:
+        return [(0.0, None)]
+    n = int(totale // blocco)
+    if totale - n * blocco >= MIN_ULTIMO_BLOCCO:
+        n += 1
+    return [(i * blocco, (i + 1) * blocco if i < n - 1 else None) for i in range(n)]
+
+
+def segment_audio(path: Path, blocco: float = 300.0) -> list[tuple[str, float, float]]:
     import warnings
 
     warnings.filterwarnings("ignore", category=UserWarning, module="keras")
@@ -155,9 +187,17 @@ def segment_audio(path: Path) -> list[tuple[str, float, float]]:
     logger.info("Segmentazione parlato/musica (inaSpeechSegmenter)...")
     t0 = time.time()
     seg = Segmenter(vad_engine="smn", detect_gender=False)
-    raw = seg(str(path))
+    parti = blocchi(durata(path) if blocco and blocco > 0 else None, blocco)
+    raw = []
+    for i, (inizio, fine) in enumerate(parti, 1):
+        if len(parti) > 1:
+            logger.info(f"  blocco {i}/{len(parti)} da {fmt_mmss(inizio)}")
+        # i tempi restituiti sono già assoluti (inaSpeechSegmenter somma start_sec)
+        raw += seg(str(path), start_sec=inizio or None, stop_sec=fine)
+    # ai confini tra blocchi lo stesso tipo di segmento risulta spezzato in due
+    raw = [(str(lab), float(s), float(e)) for lab, s, e in merge([[lab, s, e] for lab, s, e in raw])]
     logger.info(f"  fatto in {time.time() - t0:.0f} s, {len(raw)} segmenti grezzi")
-    return [(str(lab), float(s), float(e)) for lab, s, e in raw]
+    return raw
 
 
 def clean_segments(raw, min_speech=3.0, min_music=2.0, max_pause=2.5):
@@ -534,7 +574,7 @@ def run(input: Path, args: Opzioni) -> None:
         logger.info(f"Uso la segmentazione esistente: {tsv.name}")
         segs = read_tsv(tsv)
     else:
-        segs = clean_segments(segment_audio(input), args.min_parlato, args.min_musica)
+        segs = clean_segments(segment_audio(input, args.blocco_segmentazione), args.min_parlato, args.min_musica)
         write_tsv(tsv, segs)
         logger.info(f"Segmentazione salvata in {tsv}")
     tot = segs[-1][2] if segs else 0
