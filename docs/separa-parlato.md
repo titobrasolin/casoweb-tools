@@ -52,6 +52,24 @@ lavora solo sulle parti diventate "parlato" che non sono ancora in cache,
 quindi dopo una correzione i sottotitoli si rigenerano in pochi secondi.
 Con `--no-audio` si rigenerano soltanto gli SRT.
 
+### Memoria e registrazioni lunghe
+
+inaSpeechSegmenter tiene in memoria le caratteristiche di tutto il tratto che
+analizza, quindi la segmentazione procede a blocchi di 5 minuti
+(`--blocco-segmentazione 300`). La memoria usata non dipende più dalla
+durata della registrazione. Misure su 2 vCPU, con TensorFlow 2.21:
+
+| Blocco | Picco di memoria | Tempo per 30 minuti di audio |
+|---|---|---|
+| intero file (`0`), 30 minuti | 3,2 GB (oltre 6 GB per un'ora) | 41 s |
+| 600 s | 1,9 GB | 53 s |
+| 300 s (predefinito) | 1,3 GB | 57 s |
+| 120 s | 0,9 GB | 86 s |
+
+La durata del file si misura decodificandolo (pochi secondi per ora di
+audio): per l'AAC registrato da una radio in streaming la stima di ffprobe
+può sbagliare di parecchi secondi e far cadere l'ultimo blocco oltre la fine.
+
 ### GPU e prestazioni
 
 - `--device auto` (predefinito) usa la GPU NVIDIA se CTranslate2 la vede,
