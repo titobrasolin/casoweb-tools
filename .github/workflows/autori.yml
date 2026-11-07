@@ -1,0 +1,55 @@
+name: autori
+
+# Blocca le PR con commit a nome di un'identità non ammessa: GitHub attribuisce i commit
+# in base all'email, e il merge squash trasforma gli autori della PR in trailer
+# Co-authored-by, che su main restano visibili.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  autori:
+    name: autori
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Email di autori, committer e co-autori
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          ammessa() {
+            case "$1" in
+              tito.brasolin@gmail.com | \
+              1615561+titobrasolin@users.noreply.github.com | \
+              titobrasolin@users.noreply.github.com | \
+              noreply@anthropic.com | \
+              noreply@github.com | \
+              *"[bot]@users.noreply.github.com") return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+          errori=0
+          for sha in $(git rev-list "$BASE..$HEAD"); do
+            email=$(git log -1 --format='%ae%n%ce%n%(trailers:key=Co-authored-by,valueonly)' "$sha" \
+              | sed -E 's/.*<(.*)>.*/\1/' | tr '[:upper:]' '[:lower:]' | sed '/^$/d' | sort -u)
+            for e in $email; do
+              if ! ammessa "$e"; then
+                echo "::error::$(git log -1 --format='%h %s' "$sha"): email non ammessa $e"
+                errori=1
+              fi
+            done
+          done
+          if [ "$errori" -ne 0 ]; then
+            echo "Imposta l'identità nel clone e riscrivi i commit della PR:"
+            echo "  git config user.email tito.brasolin@gmail.com"
+            echo "  git rebase --exec 'git commit --amend --no-edit --reset-author' origin/main"
+            echo "  git push --force-with-lease"
+          fi
+          exit "$errori"
