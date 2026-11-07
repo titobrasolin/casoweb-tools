@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
-# un nuovo push sulla stessa PR annulla il giro precedente
+# Un nuovo push sulla stessa PR annulla il giro precedente. Su main ogni commit ha un gruppo
+# suo e arriva in fondo: "modifiche" guarda solo l'ultimo push, quindi un commit di sola
+# documentazione non deve annullare i test del commit di codice che lo precede.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
